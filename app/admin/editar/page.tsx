@@ -10,6 +10,7 @@ import {
   MESES_LISTA, mesNumero, formatBRL, calcBonus, calcStatus, calcPctMeta,
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes } from '@/lib/types'
+import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes } from '@/lib/demo-data'
 
 const ANO = 2025
 
@@ -31,9 +32,23 @@ export default function EditarPage() {
 
   const carregar = useCallback(async (mes: string) => {
     setLoading(true)
-    const supabase = createClient()
     const mesNum = mesNumero(mes)
 
+    if (DEMO_MODE) {
+      const profList = DEMO_PROFILES
+      const cfg = getDemoConfig(mesNum)
+      const resultados = getDemoResultadosMes(mesNum)
+      setProfiles(profList)
+      setConfig(cfg)
+      setValores(profList.map(p => {
+        const r = resultados.find(x => x.profile_id === p.id)
+        return { profile_id: p.id, realizado: r?.realizado ?? 0, comissao: r?.comissao_avaliacoes ?? 0 }
+      }))
+      setLoading(false)
+      return
+    }
+
+    const supabase = createClient()
     const [{ data: profs }, { data: cfg }, { data: resultados }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO).single(),
@@ -54,6 +69,15 @@ export default function EditarPage() {
 
   async function handleSalvar() {
     setSaving(true)
+
+    if (DEMO_MODE) {
+      await new Promise(r => setTimeout(r, 600))
+      setSaving(false)
+      setSalvo(true)
+      setTimeout(() => setSalvo(false), 3000)
+      return
+    }
+
     const supabase = createClient()
     const mesNum = mesNumero(mesSelecionado)
 

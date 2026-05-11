@@ -11,6 +11,7 @@ import {
   getMedalEmoji, getStatusClass,
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes } from '@/lib/types'
+import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
 
 const ANO = 2025
 
@@ -26,6 +27,22 @@ export default function PainelProfissional() {
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string) => {
+    if (DEMO_MODE) {
+      const mesNum = mesNumero(mes)
+      const cfg = getDemoConfig(mesNum)
+      const resMes = getDemoResultadosMes(mesNum)
+      const resAnual = getDemoResultadosAnual(mesNum)
+      const r = resMes.find(x => x.profile_id === uid)
+      const acum = resAnual.filter(x => x.profile_id === uid).reduce((s, x) => s + x.realizado, 0)
+      const sorted = [...resMes].sort((a, b) => b.realizado - a.realizado)
+      const idx = sorted.findIndex(x => x.profile_id === uid)
+      setConfig(cfg)
+      setRealizado(r?.realizado ?? 0)
+      setAcumuladoAnual(acum)
+      setPosicao(idx >= 0 ? idx + 1 : 1)
+      return
+    }
+
     const supabase = createClient()
     const mesNum = mesNumero(mes)
 
@@ -49,6 +66,14 @@ export default function PainelProfissional() {
   }, [])
 
   useEffect(() => {
+    if (DEMO_MODE) {
+      const storedId = typeof window !== 'undefined' ? localStorage.getItem('demo_user_id') : null
+      const prof = storedId ? getDemoProfile(storedId) : DEMO_PROFILES[0]
+      setProfile(prof)
+      setProfileId(prof.id)
+      return
+    }
+
     const supabase = createClient()
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push('/login'); return }

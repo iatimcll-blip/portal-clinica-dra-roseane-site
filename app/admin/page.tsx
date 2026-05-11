@@ -12,6 +12,7 @@ import {
   calcPctMeta, getMensagem, getMensagemAnual, mesNumero,
 } from '@/lib/formulas'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
+import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 
 type Aba = 'mensal' | 'anual' | 'bonus'
 
@@ -29,6 +30,16 @@ export default function AdminPage() {
 
   const carregarDados = useCallback(async () => {
     setLoading(true)
+
+    if (DEMO_MODE) {
+      setProfiles(DEMO_PROFILES)
+      setConfig(getDemoConfig(mesNum))
+      setResultados(getDemoResultadosMes(mesNum))
+      setTodosResultados(getDemoResultadosAnual(mesNum))
+      setLoading(false)
+      return
+    }
+
     const supabase = createClient()
 
     const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }] = await Promise.all([

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
+import { DEMO_MODE, matchDemoProfileByEmail } from '@/lib/demo-data'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -17,6 +18,17 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setErro('')
+
+    if (DEMO_MODE) {
+      if (email.toLowerCase().includes('admin')) {
+        router.push('/admin')
+      } else {
+        const prof = matchDemoProfileByEmail(email)
+        localStorage.setItem('demo_user_id', prof.id)
+        router.push('/painel')
+      }
+      return
+    }
 
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
