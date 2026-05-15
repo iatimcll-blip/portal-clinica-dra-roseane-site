@@ -71,7 +71,7 @@ export default function LoginPage() {
             <form onSubmit={handleLogin}>
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: 'block', fontSize: 13, color: 'rgba(240,230,255,0.6)', marginBottom: 8, fontWeight: 500 }}>E-mail</label>
-                <input type="email" className="input-field" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                <input type="text" inputMode="email" className="input-field" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
               <div style={{ marginBottom: 24 }}>
                 <label style={{ display: 'block', fontSize: 13, color: 'rgba(240,230,255,0.6)', marginBottom: 8, fontWeight: 500 }}>Senha</label>

@@ -49,6 +49,24 @@ export default function EditarPage() {
     }
 
     const supabase = createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    const { data: currentProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (currentProfile?.role !== 'admin') {
+      router.push('/painel')
+      return
+    }
+
     const [{ data: profs }, { data: cfg }, { data: resultados }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO).single(),
@@ -63,9 +81,9 @@ export default function EditarPage() {
       return { profile_id: p.id, realizado: r?.realizado ?? 0, comissao: r?.comissao_avaliacoes ?? 0 }
     }))
     setLoading(false)
-  }, [])
+  }, [router])
 
-  useEffect(() => { carregar(mesSelecionado) }, [mesSelecionado, carregar])
+  useEffect(() => { queueMicrotask(() => { carregar(mesSelecionado) }) }, [mesSelecionado, carregar])
 
   async function handleSalvar() {
     setSaving(true)
@@ -99,6 +117,11 @@ export default function EditarPage() {
   }
 
   async function handleSair() {
+    if (DEMO_MODE) {
+      router.push('/login')
+      return
+    }
+
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')

@@ -67,10 +67,12 @@ export default function PainelProfissional() {
 
   useEffect(() => {
     if (DEMO_MODE) {
-      const storedId = typeof window !== 'undefined' ? localStorage.getItem('demo_user_id') : null
-      const prof = storedId ? getDemoProfile(storedId) : DEMO_PROFILES[0]
-      setProfile(prof)
-      setProfileId(prof.id)
+      queueMicrotask(() => {
+        const storedId = localStorage.getItem('demo_user_id')
+        const prof = storedId ? getDemoProfile(storedId) : DEMO_PROFILES[0]
+        setProfile(prof)
+        setProfileId(prof.id)
+      })
       return
     }
 
@@ -86,11 +88,19 @@ export default function PainelProfissional() {
 
   useEffect(() => {
     if (!profileId) return
-    setLoading(true)
-    carregar(mesSelecionado, profileId).then(() => setLoading(false))
+    queueMicrotask(() => {
+      setLoading(true)
+      carregar(mesSelecionado, profileId).then(() => setLoading(false))
+    })
   }, [mesSelecionado, profileId, carregar])
 
   async function handleSair() {
+    if (DEMO_MODE) {
+      localStorage.removeItem('demo_user_id')
+      router.push('/login')
+      return
+    }
+
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')

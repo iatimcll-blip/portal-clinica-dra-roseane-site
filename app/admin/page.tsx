@@ -42,6 +42,23 @@ export default function AdminPage() {
 
     const supabase = createClient()
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    const { data: currentProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (currentProfile?.role !== 'admin') {
+      router.push('/painel')
+      return
+    }
+
     const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', 2025).single(),
@@ -54,11 +71,16 @@ export default function AdminPage() {
     setResultados(res ?? [])
     setTodosResultados(anuais ?? [])
     setLoading(false)
-  }, [mesNum])
+  }, [mesNum, router])
 
-  useEffect(() => { carregarDados() }, [carregarDados])
+  useEffect(() => { queueMicrotask(() => { carregarDados() }) }, [carregarDados])
 
   async function handleSair() {
+    if (DEMO_MODE) {
+      router.push('/login')
+      return
+    }
+
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')

@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Painel Clínica Dra. Roseane Débora
 
-## Getting Started
+Site em Next.js para transformar a planilha de metas da clínica em um painel com acesso individual por profissional.
 
-First, run the development server:
+## O que o site faz
+
+- Login individual para cada profissional.
+- Painel da profissional em `/painel`, mostrando somente os próprios resultados.
+- Painel administrativo em `/admin`, com visão geral de todas as profissionais.
+- Tela administrativa em `/admin/editar` para atualizar metas, realizado mensal e comissão de avaliações.
+- Regras de segurança no Supabase para impedir que uma profissional leia dados de outra.
+
+## Rodar localmente
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+O arquivo `.env.local` está em modo demonstração:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+NEXT_PUBLIC_DEMO_MODE=true
+```
 
-## Learn More
+Nesse modo, use qualquer senha e entre com estes e-mails:
 
-To learn more about Next.js, take a look at the following resources:
+| Perfil | E-mail |
+| --- | --- |
+| Admin | admin@clinica.com |
+| Erica | erica@clinica.com |
+| Gilmara | gilmara@clinica.com |
+| Kelly | kelly@clinica.com |
+| Maria | maria@clinica.com |
+| Tayane | tayane@clinica.com |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Publicar com Supabase
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Crie um projeto no Supabase.
+2. Execute `supabase/schema.sql` no SQL Editor.
+3. Crie os usuários em Authentication > Users.
+4. Ajuste os perfis conforme `supabase/usuarios.sql`.
+5. Execute `supabase/importar_dados_planilha.sql` para carregar os dados extraídos da planilha.
+6. Configure `.env.local` com as chaves reais e desligue o modo demo:
 
-## Deploy on Vercel
+```env
+NEXT_PUBLIC_SUPABASE_URL=SUA_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY=SUA_CHAVE_ANON
+NEXT_PUBLIC_DEMO_MODE=false
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Hospedar no GitHub Pages
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O projeto já contém o workflow:
+
+`/.github/workflows/deploy.yml`
+
+Depois que o código estiver em um repositório do GitHub:
+
+1. Abra o repositório no GitHub.
+2. Vá em Settings > Pages.
+3. Em Build and deployment, selecione Source: GitHub Actions.
+4. Faça push na branch `master` ou `main`.
+5. Aguarde o workflow `Deploy GitHub Pages` finalizar.
+
+O site será publicado em:
+
+`https://SEU_USUARIO.github.io/NOME_DO_REPOSITORIO/`
+
+Para publicar com dados reais, cadastre estas variáveis no GitHub em Settings > Secrets and variables > Actions > Variables:
+
+| Variável | Valor |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave pública anon do Supabase |
+| `NEXT_PUBLIC_DEMO_MODE` | `false` |
+
+Se quiser publicar primeiro em modo demonstração, mantenha `NEXT_PUBLIC_DEMO_MODE=true`.
+
+## Dados importados
+
+Os dados de metas e resultados foram extraídos de:
+
+`D:\Metas_Clinica\painel_clinica_dra_roseane_v6.xlsx`
+
+Abas usadas:
+
+- `METAS MÊS`: metas mensais, gatilho e meta máxima.
+- `BASE`: realizado mensal por profissional.
+- `AVALIAÇÕES`: comissão de avaliações, atualmente zerada na planilha.
