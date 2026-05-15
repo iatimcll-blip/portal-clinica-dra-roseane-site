@@ -1,0 +1,58 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build static site
+        env:
+          NEXT_PUBLIC_DEMO_MODE: ${{ vars.NEXT_PUBLIC_DEMO_MODE || 'true' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder_key_for_visual_testing_only' }}
+        shell: bash
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          NEXT_PUBLIC_BASE_PATH="/${REPO_NAME}" npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
