@@ -8,6 +8,7 @@ import DecoracaoDireita from '@/components/DecoracaoDireita'
 import { createClient } from '@/lib/supabase/client'
 import {
   MESES_LISTA, mesNumero, formatBRL, calcBonus, calcStatus, calcPctMeta,
+  calcComissaoAvaliacoes, getStatusClass,
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes } from '@/lib/types'
 import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes } from '@/lib/demo-data'
@@ -128,8 +129,10 @@ export default function EditarPage() {
   }
 
   const totalRealizado = valores.reduce((s, v) => s + v.realizado, 0)
-  const totalBonus = valores.reduce((s, v) => s + calcBonus(v.realizado, config.meta_gatilho, config.meta_max), 0)
+  const totalBonus = valores.reduce((s, v) => s + calcBonus(v.realizado, config.meta_gatilho, config.meta_max, totalRealizado, config.meta_clinica), 0)
+  const totalComissaoAvaliacoes = valores.reduce((s, v) => s + calcComissaoAvaliacoes(v.comissao), 0)
   const pctClinica = config.meta_clinica > 0 ? ((totalRealizado / config.meta_clinica) * 100).toFixed(1) : '0.0'
+  const metaClinicaBatida = totalRealizado >= config.meta_clinica
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -215,14 +218,14 @@ export default function EditarPage() {
               <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <h3 style={{ fontSize: 15, fontWeight: 600 }}>👩‍⚕️ Resultados por Profissional — {mesSelecionado}</h3>
                 <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.4)', marginTop: 4 }}>
-                  Edite os valores — bônus e status são calculados automaticamente.
+                  Edite o realizado e as vendas de avaliações. Bônus, comissão de 7% e status são calculados automaticamente.
                 </p>
               </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                      {['Profissional', 'Realizado (R$)', 'Com. Avaliações (R$)', '% Meta', 'Status', 'Bônus (calc.)'].map(h => (
+                      {['Profissional', 'Realizado (R$)', 'Vendas Avaliações (R$)', 'Comissão 7%', '% Meta', 'Status', 'Bônus (calc.)'].map(h => (
                         <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -232,8 +235,9 @@ export default function EditarPage() {
                       const v = valores[i] ?? { profile_id: prof.id, realizado: 0, comissao: 0 }
                       const pct = calcPctMeta(v.realizado, config.meta_max)
                       const status = calcStatus(v.realizado, config.meta_gatilho, config.meta_max)
-                      const bonus = calcBonus(v.realizado, config.meta_gatilho, config.meta_max)
-                      const statusCls = status === 'Acima da meta' ? 'badge-acima' : status === 'Acima do gatilho' ? 'badge-gatilho' : 'badge-abaixo'
+                      const bonus = calcBonus(v.realizado, config.meta_gatilho, config.meta_max, totalRealizado, config.meta_clinica)
+                      const comissaoAvaliacoes = calcComissaoAvaliacoes(v.comissao)
+                      const statusCls = getStatusClass(status)
 
                       return (
                         <tr key={prof.id} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
@@ -258,6 +262,7 @@ export default function EditarPage() {
                               step="100"
                             />
                           </td>
+                          <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 600, color: '#facc15', whiteSpace: 'nowrap' }}>{formatBRL(comissaoAvaliacoes)}</td>
                           <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 600 }}>{pct}%</td>
                           <td style={{ padding: '14px 16px' }}>
                             <span className={statusCls}>{status}</span>
@@ -275,11 +280,13 @@ export default function EditarPage() {
 
             <div className="glass-sm" style={{ padding: 24, marginTop: 24 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>📋 Resumo Calculado Automaticamente</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
                 {[
                   { label: 'Total Realizado', valor: formatBRL(totalRealizado), cor: '#f472b6' },
                   { label: 'Total Bônus', valor: formatBRL(totalBonus), cor: '#c084fc' },
+                  { label: 'Comissão Avaliações', valor: formatBRL(totalComissaoAvaliacoes), cor: '#facc15' },
                   { label: '% Meta Clínica', valor: `${pctClinica}%`, cor: Number(pctClinica) >= 100 ? '#4ade80' : '#facc15' },
+                  { label: 'Regra abaixo gatilho', valor: metaClinicaBatida ? 'MGM atingida' : 'MGM não atingida', cor: metaClinicaBatida ? '#4ade80' : '#f87171' },
                 ].map((c, i) => (
                   <div key={i} style={{ padding: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 12 }}>
                     <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)', marginBottom: 6 }}>{c.label}</div>

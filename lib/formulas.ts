@@ -3,15 +3,43 @@ export const MESES_LISTA = [
   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
 ]
 
-export function calcBonus(realizado: number, metaGatilho: number, metaMax: number): number {
-  if (realizado >= metaMax) return 1350
-  if (realizado >= metaGatilho) return 1350
-  return parseFloat((realizado * 0.075).toFixed(2))
+export const BONUS_BASE = 1350
+export const PERCENTUAL_COMISSAO_AVALIACOES = 0.07
+
+export function roundCurrency(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
+export function calcBonus(
+  realizado: number,
+  metaGatilho: number,
+  metaMax: number,
+  totalClinica = 0,
+  metaClinica = Number.POSITIVE_INFINITY,
+  bonusBase = BONUS_BASE,
+): number {
+  if (realizado <= 0 || metaMax <= 0 || bonusBase <= 0) return 0
+
+  const clinicaBateuMgm = Number.isFinite(metaClinica) && metaClinica > 0 && totalClinica >= metaClinica
+  const elegivel = realizado >= metaGatilho || clinicaBateuMgm
+
+  if (!elegivel) return 0
+
+  return roundCurrency(Math.min(bonusBase, bonusBase * (realizado / metaMax)))
+}
+
+export function calcComissaoAvaliacoes(vendasAvaliacoes: number): number {
+  return roundCurrency((vendasAvaliacoes || 0) * PERCENTUAL_COMISSAO_AVALIACOES)
+}
+
+export function calcTotalReceber(bonus: number, vendasAvaliacoes: number): number {
+  return roundCurrency(bonus + calcComissaoAvaliacoes(vendasAvaliacoes))
 }
 
 export function calcStatus(realizado: number, metaGatilho: number, metaMax: number): string {
   if (realizado >= metaMax) return 'Acima da meta'
-  if (realizado >= metaGatilho) return 'Acima do gatilho'
+  if (realizado >= metaGatilho) return 'No gatilho'
   return 'Abaixo do gatilho'
 }
 
@@ -53,7 +81,7 @@ export function formatBRL(value: number): string {
 
 export function getStatusClass(status: string): string {
   if (status === 'Acima da meta') return 'badge-acima'
-  if (status === 'Acima do gatilho') return 'badge-gatilho'
+  if (status === 'No gatilho' || status === 'Acima do gatilho') return 'badge-gatilho'
   return 'badge-abaixo'
 }
 

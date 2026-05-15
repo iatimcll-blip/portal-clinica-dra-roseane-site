@@ -10,6 +10,7 @@ import {
   MESES_LISTA, formatBRL, getStatusClass, getProgressColor,
   getMedalEmoji, calcBonus, calcStatus, calcPctGatilho,
   calcPctMeta, getMensagem, getMensagemAnual, mesNumero,
+  calcComissaoAvaliacoes, calcTotalReceber,
 } from '@/lib/formulas'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
@@ -35,7 +36,7 @@ export default function AdminPage() {
       setProfiles(DEMO_PROFILES)
       setConfig(getDemoConfig(mesNum))
       setResultados(getDemoResultadosMes(mesNum))
-      setTodosResultados(getDemoResultadosAnual(mesNum))
+      setTodosResultados(getDemoResultadosAnual(12))
       setLoading(false)
       return
     }
@@ -63,7 +64,7 @@ export default function AdminPage() {
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', 2025).single(),
       supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', 2025),
-      supabase.from('resultados').select('*').eq('ano', 2025).lte('mes', mesNum),
+      supabase.from('resultados').select('*').eq('ano', 2025),
     ])
 
     setProfiles(profs ?? [])
@@ -92,20 +93,27 @@ export default function AdminPage() {
     return resultados.find(r => r.profile_id === profileId) ?? { realizado: 0, comissao_avaliacoes: 0, profile_id: profileId, mes: mesNum, ano: 2025 }
   }
 
+  const totalRealizado = profiles.reduce((s, p) => s + getRes(p.id).realizado, 0)
+  const faltaClinica = Math.max(0, cfg.meta_clinica - totalRealizado)
+  const ticketMedio = profiles.length > 0 ? totalRealizado / profiles.length : 0
+  const metaClinicaBatida = totalRealizado >= cfg.meta_clinica
+
   // Ranking mensal ordenado
   const rankingMensal = [...profiles]
     .map(p => {
       const r = getRes(p.id)
-      const bonus = calcBonus(r.realizado, cfg.meta_gatilho, cfg.meta_max)
+      const vendasAvaliacoes = r.comissao_avaliacoes ?? 0
+      const bonus = calcBonus(r.realizado, cfg.meta_gatilho, cfg.meta_max, totalRealizado, cfg.meta_clinica)
       return {
         ...p,
         realizado: r.realizado,
-        comissao_avaliacoes: r.comissao_avaliacoes,
+        vendas_avaliacoes: vendasAvaliacoes,
+        comissao_avaliacoes: calcComissaoAvaliacoes(vendasAvaliacoes),
         pctGatilho: calcPctGatilho(r.realizado, cfg.meta_gatilho),
         pctMeta: calcPctMeta(r.realizado, cfg.meta_max),
         status: calcStatus(r.realizado, cfg.meta_gatilho, cfg.meta_max),
         bonus,
-        totalReceber: bonus + r.comissao_avaliacoes,
+        totalReceber: calcTotalReceber(bonus, vendasAvaliacoes),
       }
     })
     .sort((a, b) => b.realizado - a.realizado)
@@ -122,13 +130,12 @@ export default function AdminPage() {
     .sort((a, b) => b.acumulado - a.acumulado)
     .map((p, i) => ({ ...p, pos: i + 1, mensagem: getMensagemAnual(i + 1) }))
 
-  const totalRealizado = rankingMensal.reduce((s, p) => s + p.realizado, 0)
   const pctClinica = calcPctMeta(totalRealizado, cfg.meta_clinica)
-  const totalComissoes = totalRealizado * 0.07
+  const totalComissoes = rankingMensal.reduce((s, p) => s + p.comissao_avaliacoes, 0)
 
   const totalBonus = rankingMensal.reduce((s, p) => s + p.bonus, 0)
-  const totalComAvaliacao = rankingMensal.reduce((s, p) => s + p.comissao_avaliacoes, 0)
-  const totalGeral = totalBonus + totalComAvaliacao
+  const totalVendasAvaliacao = rankingMensal.reduce((s, p) => s + p.vendas_avaliacoes, 0)
+  const totalGeral = totalBonus + totalComissoes
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -168,12 +175,14 @@ export default function AdminPage() {
         ) : (
           <>
             {/* Cards resumo */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 24 }}>
               {[
                 { label: 'Faturamento do Mês', valor: formatBRL(totalRealizado), icon: '💰', cor: '#f472b6' },
                 { label: 'Meta Clínica', valor: formatBRL(cfg.meta_clinica), icon: '🎯', cor: '#c084fc' },
                 { label: '% Atingimento', valor: `${pctClinica}%`, icon: '📈', cor: pctClinica >= 100 ? '#4ade80' : '#facc15' },
-                { label: 'Total Comissões (7%)', valor: formatBRL(totalComissoes), icon: '💳', cor: '#facc15' },
+                { label: 'Falta p/ Meta', valor: formatBRL(faltaClinica), icon: 'R$', cor: faltaClinica === 0 ? '#4ade80' : '#facc15' },
+                { label: 'Ticket Médio / Prof.', valor: formatBRL(ticketMedio), icon: 'TM', cor: '#38bdf8' },
+                { label: 'Comissão Avaliações (7%)', valor: formatBRL(totalComissoes), icon: '7%', cor: '#facc15' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm" style={{ padding: 20 }}>
                   <div style={{ fontSize: 24, marginBottom: 8 }}>{c.icon}</div>
@@ -184,10 +193,11 @@ export default function AdminPage() {
             </div>
 
             {/* Metas */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 24 }}>
               {[
                 { label: 'Meta Gatilho por Prof. (mín)', valor: formatBRL(cfg.meta_gatilho) },
                 { label: 'Meta Mês por Prof. (máx)', valor: formatBRL(cfg.meta_max) },
+                { label: 'Regra abaixo do gatilho', valor: metaClinicaBatida ? 'MGM atingida' : 'MGM não atingida' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm" style={{ padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)' }}>{c.label}</div>
@@ -287,12 +297,12 @@ export default function AdminPage() {
                 <div className="glass-sm" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
                   <div style={{ padding: '18px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                     <h2 style={{ fontSize: 16, fontWeight: 600 }}>💰 Bônus e Comissões — {mesSelecionado.toUpperCase()}</h2>
-                    <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.4)', marginTop: 4 }}>Total a Receber = Bônus de Meta + Comissão de Avaliações (7%)</p>
+                    <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.4)', marginTop: 4 }}>Bônus = min(R$ 1.350, R$ 1.350 x realizado / MMmax). Abaixo do gatilho só recebe se a MGM for atingida. Comissão = 7% das vendas de avaliações.</p>
                   </div>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead><tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                        {['Pos.','Profissional','Realizado','Bônus de Meta','Com. Avaliações (7%)','Total a Receber'].map(h => (
+                        {['Pos.','Profissional','Realizado','Bônus de Meta','Vendas Avaliações','Comissão (7%)','Total a Receber'].map(h => (
                           <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr></thead>
@@ -303,6 +313,9 @@ export default function AdminPage() {
                             <td style={{ padding: 16, fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>{p.nome}</td>
                             <td style={{ padding: 16, fontSize: 14, fontWeight: 600, color: '#f472b6', whiteSpace: 'nowrap' }}>{formatBRL(p.realizado)}</td>
                             <td style={{ padding: 16, fontSize: 14, fontWeight: 600, color: '#c084fc', whiteSpace: 'nowrap' }}>{formatBRL(p.bonus)}</td>
+                            <td style={{ padding: 16, fontSize: 14, color: p.vendas_avaliacoes > 0 ? '#facc15' : 'rgba(240,230,255,0.3)', whiteSpace: 'nowrap' }}>
+                              {formatBRL(p.vendas_avaliacoes)}
+                            </td>
                             <td style={{ padding: 16, fontSize: 14, color: p.comissao_avaliacoes > 0 ? '#facc15' : 'rgba(240,230,255,0.3)', whiteSpace: 'nowrap' }}>
                               {formatBRL(p.comissao_avaliacoes)}
                             </td>
@@ -317,10 +330,11 @@ export default function AdminPage() {
                 </div>
 
                 {/* Cards totais */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
                   {[
                     { label: 'Total Bônus de Meta', valor: formatBRL(totalBonus), icon: '🏆', cor: '#c084fc' },
-                    { label: 'Total Com. Avaliações', valor: formatBRL(totalComAvaliacao), icon: '📋', cor: '#facc15' },
+                    { label: 'Total Vendas Avaliações', valor: formatBRL(totalVendasAvaliacao), icon: '📋', cor: '#38bdf8' },
+                    { label: 'Total Com. Avaliações', valor: formatBRL(totalComissoes), icon: '💳', cor: '#facc15' },
                     { label: 'Total Geral a Pagar', valor: formatBRL(totalGeral), icon: '💰', cor: '#4ade80' },
                   ].map((c, i) => (
                     <div key={i} className="glass-sm" style={{ padding: 24, textAlign: 'center' }}>
