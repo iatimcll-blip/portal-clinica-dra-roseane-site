@@ -2,7 +2,7 @@ import Image from 'next/image'
 
 export default function DecoracaoDireita() {
   return (
-    <div style={{
+    <div className="decoracao-direita" style={{
       width: 260,
       flexShrink: 0,
       position: 'sticky',
