@@ -1,9 +1,9 @@
 1:"$Sreact.fragment"
 2:I[47257,["/portal-clinica-dra-roseane-site/_next/static/chunks/01xlw8hd842-c.js","/portal-clinica-dra-roseane-site/_next/static/chunks/0d3shmwh5_nmn.js"],"ClientPageRoot"]
-3:I[92896,["/portal-clinica-dra-roseane-site/_next/static/chunks/01xlw8hd842-c.js","/portal-clinica-dra-roseane-site/_next/static/chunks/0d3shmwh5_nmn.js","/portal-clinica-dra-roseane-site/_next/static/chunks/0v62e1wybyahr.js","/portal-clinica-dra-roseane-site/_next/static/chunks/0-j1_41w34dj7.js"],"default"]
+3:I[92896,["/portal-clinica-dra-roseane-site/_next/static/chunks/01xlw8hd842-c.js","/portal-clinica-dra-roseane-site/_next/static/chunks/0d3shmwh5_nmn.js","/portal-clinica-dra-roseane-site/_next/static/chunks/0yijr39g8jcs4.js","/portal-clinica-dra-roseane-site/_next/static/chunks/0g9utwv~72ci1.js"],"default"]
 6:I[97367,["/portal-clinica-dra-roseane-site/_next/static/chunks/01xlw8hd842-c.js","/portal-clinica-dra-roseane-site/_next/static/chunks/0d3shmwh5_nmn.js"],"OutletBoundary"]
 7:"$Sreact.suspense"
-0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/portal-clinica-dra-roseane-site/_next/static/chunks/0v62e1wybyahr.js","async":true}],["$","script","script-1",{"src":"/portal-clinica-dra-roseane-site/_next/static/chunks/0-j1_41w34dj7.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"5HvqNUJT6lql3q6BR-Y5D"}
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/portal-clinica-dra-roseane-site/_next/static/chunks/0yijr39g8jcs4.js","async":true}],["$","script","script-1",{"src":"/portal-clinica-dra-roseane-site/_next/static/chunks/0g9utwv~72ci1.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"t8DX8RO2gxC2iUyfscvWW"}
 4:{}
 5:"$0:rsc:props:children:0:props:serverProvidedParams:params"
 8:null

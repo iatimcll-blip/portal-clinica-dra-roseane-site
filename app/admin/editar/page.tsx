@@ -12,7 +12,7 @@ import {
   calcComissaoAvaliacoes, getStatusClass,
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes } from '@/lib/types'
-import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes } from '@/lib/demo-data'
+import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes, salvarDemoMes } from '@/lib/demo-data'
 
 const ANO = 2025
 
@@ -31,9 +31,11 @@ export default function EditarPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [salvo, setSalvo] = useState(false)
+  const [erroSalvar, setErroSalvar] = useState('')
 
   const carregar = useCallback(async (mes: string) => {
     setLoading(true)
+    setErroSalvar('')
     const mesNum = mesNumero(mes)
 
     if (DEMO_MODE) {
@@ -89,33 +91,49 @@ export default function EditarPage() {
 
   async function handleSalvar() {
     setSaving(true)
-
-    if (DEMO_MODE) {
-      await new Promise(r => setTimeout(r, 600))
-      setSaving(false)
-      setSalvo(true)
-      setTimeout(() => setSalvo(false), 3000)
-      return
-    }
-
-    const supabase = createClient()
+    setErroSalvar('')
     const mesNum = mesNumero(mesSelecionado)
 
-    await supabase.from('configuracoes_mes').upsert(
-      { ...config, mes: mesNum, ano: ANO },
-      { onConflict: 'mes,ano' }
-    )
+    try {
+      if (DEMO_MODE) {
+        salvarDemoMes(config, valores, mesNum, ANO)
+        await carregar(mesSelecionado)
+        setSalvo(true)
+        setTimeout(() => setSalvo(false), 3000)
+        return
+      }
 
-    for (const v of valores) {
-      await supabase.from('resultados').upsert(
-        { profile_id: v.profile_id, mes: mesNum, ano: ANO, realizado: v.realizado, comissao_avaliacoes: v.comissao },
+      const supabase = createClient()
+
+      const { error: configError } = await supabase.from('configuracoes_mes').upsert(
+        { ...config, mes: mesNum, ano: ANO },
+        { onConflict: 'mes,ano' }
+      )
+
+      if (configError) throw configError
+
+      const { error: resultadosError } = await supabase.from('resultados').upsert(
+        valores.map(v => ({
+          profile_id: v.profile_id,
+          mes: mesNum,
+          ano: ANO,
+          realizado: v.realizado,
+          comissao_avaliacoes: v.comissao,
+        })),
         { onConflict: 'profile_id,mes,ano' }
       )
-    }
 
-    setSaving(false)
-    setSalvo(true)
-    setTimeout(() => setSalvo(false), 3000)
+      if (resultadosError) throw resultadosError
+
+      await carregar(mesSelecionado)
+      setSalvo(true)
+      setTimeout(() => setSalvo(false), 3000)
+    } catch (error) {
+      console.error('Erro ao salvar metas', error)
+      setErroSalvar('Nao foi possivel salvar as alteracoes. Verifique sua conexao e as permissoes do acesso admin.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleSair() {
@@ -181,11 +199,20 @@ export default function EditarPage() {
               ))}
             </select>
             <button onClick={handleSalvar} className="btn-primary"
-              style={{ width: 'auto', padding: '10px 24px' }} disabled={saving}>
+              style={{ width: 'auto', padding: '10px 24px' }} disabled={saving || loading}>
               {salvo ? '✅ Salvo!' : saving ? 'Salvando...' : '💾 Salvar'}
             </button>
           </div>
         </div>
+
+        {erroSalvar && (
+          <div className="glass-sm" style={{
+            padding: '12px 16px', marginBottom: 18, borderColor: 'rgba(248,113,113,0.35)',
+            color: '#fecaca', fontSize: 13,
+          }}>
+            {erroSalvar}
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60, color: 'rgba(240,230,255,0.4)' }}>Carregando...</div>

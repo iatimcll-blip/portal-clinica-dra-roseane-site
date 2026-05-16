@@ -62,9 +62,11 @@ CREATE POLICY "admin_update_profiles"
 CREATE POLICY "authenticated_read_config"
   ON configuracoes_mes FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "admin_write_config" ON configuracoes_mes;
 CREATE POLICY "admin_write_config"
   ON configuracoes_mes FOR ALL
-  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
 
 -- RESULTADOS: user vê só os próprios; admin vê e edita todos
 CREATE POLICY "user_see_own_resultados"
@@ -74,9 +76,11 @@ CREATE POLICY "admin_see_all_resultados"
   ON resultados FOR SELECT
   USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
 
+DROP POLICY IF EXISTS "admin_write_resultados" ON resultados;
 CREATE POLICY "admin_write_resultados"
   ON resultados FOR ALL
-  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
 
 -- =====================================================
 -- TRIGGER: cria profile automático após signup

@@ -68,17 +68,93 @@ const RAW: { profile_id: string; mes: number; realizado: number; comissao_avalia
 
 export const DEMO_RESULTADOS: Resultado[] = RAW.map((r, i) => ({ ...r, id: i + 1, ano: 2025 }))
 
+const DEMO_CONFIG_STORAGE_KEY = 'clinica_roseane_demo_configuracoes_v1'
+const DEMO_RESULTADOS_STORAGE_KEY = 'clinica_roseane_demo_resultados_v1'
+
+type ValorDemo = { profile_id: string; realizado: number; comissao: number }
+
+function storageDisponivel(): boolean {
+  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+}
+
+function lerStorage<T>(chave: string, fallback: T): T {
+  if (!storageDisponivel()) return fallback
+
+  try {
+    const valor = window.localStorage.getItem(chave)
+    return valor ? JSON.parse(valor) as T : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function salvarStorage<T>(chave: string, valor: T) {
+  if (!storageDisponivel()) return
+  window.localStorage.setItem(chave, JSON.stringify(valor))
+}
+
+function chaveResultado(resultado: Pick<Resultado, 'profile_id' | 'mes' | 'ano'>) {
+  return `${resultado.profile_id}:${resultado.ano}:${resultado.mes}`
+}
+
+function getConfigSalva(): Record<string, ConfiguracoesMes> {
+  return lerStorage<Record<string, ConfiguracoesMes>>(DEMO_CONFIG_STORAGE_KEY, {})
+}
+
+function getResultadosAtualizados(): Resultado[] {
+  const mapa = new Map(DEMO_RESULTADOS.map(resultado => [chaveResultado(resultado), resultado]))
+  const salvos = lerStorage<Resultado[]>(DEMO_RESULTADOS_STORAGE_KEY, [])
+
+  salvos.forEach(resultado => {
+    const chave = chaveResultado(resultado)
+    mapa.set(chave, { ...mapa.get(chave), ...resultado })
+  })
+
+  return Array.from(mapa.values())
+}
+
 export function getDemoConfig(mes: number): ConfiguracoesMes {
   const config = CONFIG_BY_MONTH[mes] ?? CONFIG_BY_MONTH[1]
-  return { id: mes, mes, ano: 2025, ...config }
+  const configPadrao = { id: mes, mes, ano: 2025, ...config }
+  return { ...configPadrao, ...getConfigSalva()[String(mes)] }
 }
 
 export function getDemoResultadosMes(mes: number): Resultado[] {
-  return DEMO_RESULTADOS.filter(r => r.mes === mes)
+  return getResultadosAtualizados().filter(r => r.mes === mes)
 }
 
 export function getDemoResultadosAnual(ateMes: number): Resultado[] {
-  return DEMO_RESULTADOS.filter(r => r.mes <= ateMes)
+  return getResultadosAtualizados().filter(r => r.mes <= ateMes)
+}
+
+export function salvarDemoMes(config: ConfiguracoesMes, valores: ValorDemo[], mes: number, ano = 2025) {
+  const configs = getConfigSalva()
+  configs[String(mes)] = {
+    ...config,
+    id: config.id || mes,
+    mes,
+    ano,
+  }
+  salvarStorage(DEMO_CONFIG_STORAGE_KEY, configs)
+
+  const resultados = getResultadosAtualizados()
+  const mapa = new Map(resultados.map(resultado => [chaveResultado(resultado), resultado]))
+  const proximoId = Math.max(0, ...resultados.map(resultado => resultado.id ?? 0)) + 1
+
+  valores.forEach((valor, index) => {
+    const chave = `${valor.profile_id}:${ano}:${mes}`
+    const existente = mapa.get(chave)
+    mapa.set(chave, {
+      id: existente?.id ?? proximoId + index,
+      profile_id: valor.profile_id,
+      mes,
+      ano,
+      realizado: Number.isFinite(valor.realizado) ? valor.realizado : 0,
+      comissao_avaliacoes: Number.isFinite(valor.comissao) ? valor.comissao : 0,
+    })
+  })
+
+  salvarStorage(DEMO_RESULTADOS_STORAGE_KEY, Array.from(mapa.values()))
 }
 
 export function getDemoProfile(id: string): Profile {
