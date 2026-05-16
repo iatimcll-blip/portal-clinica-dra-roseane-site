@@ -136,12 +136,12 @@ export default function EditarPage() {
   const metaClinicaBatida = totalRealizado >= config.meta_clinica
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside style={{
+    <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
+      <aside className="app-sidebar" style={{
         width: 240, background: 'rgba(0,0,0,0.4)', borderRight: '1px solid rgba(255,255,255,0.06)',
         padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0,
       }}>
-        <div style={{ marginBottom: 24, padding: '0 8px' }}>
+        <div className="sidebar-brand" style={{ marginBottom: 24, padding: '0 8px' }}>
           <div style={{ marginBottom: 8 }}>
             <Image src="/logo.png" alt="Roseane Débora Centro Estético" width={130} height={130}
               style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} />
@@ -161,15 +161,15 @@ export default function EditarPage() {
         </div>
       </aside>
 
-      <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+      <main className="app-main" style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
+        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
               <span className="gradient-text">✏️ Editar Metas</span>
             </h1>
             <p style={{ color: 'rgba(240,230,255,0.45)', fontSize: 14 }}>Atualize os valores diretamente pelo painel</p>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div className="header-actions" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <select
               value={mesSelecionado}
               onChange={e => setMesSelecionado(e.target.value)}
@@ -193,7 +193,7 @@ export default function EditarPage() {
           <>
             <div className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 20 }}>⚙️ Configurações do Mês — {mesSelecionado}</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <div className="responsive-grid edit-config-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 {([
                   { label: 'Meta Clínica (R$)', key: 'meta_clinica' },
                   { label: 'Meta Gatilho por Prof. (R$)', key: 'meta_gatilho' },
@@ -281,7 +281,7 @@ export default function EditarPage() {
 
             <div className="glass-sm" style={{ padding: 24, marginTop: 24 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>📋 Resumo Calculado Automaticamente</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+              <div className="responsive-grid edit-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
                 {[
                   { label: 'Total Realizado', valor: formatBRL(totalRealizado), cor: '#f472b6' },
                   { label: 'Total Bônus', valor: formatBRL(totalBonus), cor: '#c084fc' },

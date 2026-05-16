@@ -51,14 +51,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative' }}>
+    <div className="login-shell" style={{ display: 'flex', minHeight: '100vh' }}>
+      <div className="login-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative' }}>
 
         <div style={{ position: 'fixed', top: '-20%', left: '-10%', width: 500, height: 500, background: 'radial-gradient(circle, rgba(190,24,93,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ position: 'fixed', bottom: '-20%', left: '20%', width: 600, height: 600, background: 'radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
         <div style={{ width: '100%', maxWidth: 420 }}>
-          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div className="login-brand" style={{ textAlign: 'center', marginBottom: 32 }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
               <Image src="/logo.png" alt="Roseane Débora Centro Estético" width={180} height={180}
                 style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} priority />
@@ -66,7 +66,7 @@ export default function LoginPage() {
             <p style={{ color: 'rgba(240,230,255,0.5)', fontSize: 14 }}>Painel de Acompanhamento de Metas</p>
           </div>
 
-          <div className="glass" style={{ padding: 36 }}>
+          <div className="glass login-card" style={{ padding: 36 }}>
             <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 24, color: '#f0e6ff' }}>Entrar na sua conta</h2>
             <form onSubmit={handleLogin}>
               <div style={{ marginBottom: 16 }}>

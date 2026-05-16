@@ -127,12 +127,12 @@ export default function PainelProfissional() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside style={{
+    <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
+      <aside className="app-sidebar" style={{
         width: 220, background: 'rgba(0,0,0,0.4)', borderRight: '1px solid rgba(255,255,255,0.06)',
         padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0,
       }}>
-        <div style={{ marginBottom: 24, padding: '0 8px' }}>
+        <div className="sidebar-brand" style={{ marginBottom: 24, padding: '0 8px' }}>
           <div style={{ marginBottom: 8 }}>
             <Image src="/logo.png" alt="Roseane Débora Centro Estético" width={130} height={130}
               style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} />
@@ -153,8 +153,8 @@ export default function PainelProfissional() {
         </div>
       </aside>
 
-      <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <main className="app-main" style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
+        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
               Olá, <span className="gradient-text">{profile.primeiro_nome}! 👋</span>
@@ -173,7 +173,7 @@ export default function PainelProfissional() {
           </select>
         </div>
 
-        <div style={{
+        <div className="hero-summary" style={{
           background: 'linear-gradient(135deg, rgba(190,24,93,0.15), rgba(124,58,237,0.1))',
           border: '1px solid rgba(244,114,182,0.2)',
           borderRadius: 20, padding: '28px 32px', marginBottom: 24,
@@ -192,7 +192,7 @@ export default function PainelProfissional() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+        <div className="responsive-grid professional-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
           {[
             { label: '% Atingimento (Gatilho)', valor: `${pctGatilho}%`, icon: '⚡', cor: pctGatilho >= 100 ? '#4ade80' : '#f87171' },
             { label: '% Atingimento (Meta)', valor: `${pctMeta}%`, icon: '🎯', cor: pctMeta >= 100 ? '#4ade80' : '#facc15' },

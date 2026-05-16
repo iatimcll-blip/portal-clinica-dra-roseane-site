@@ -1,2 +1,2 @@
-:HL["/portal-clinica-dra-roseane-site/_next/static/chunks/0.3fenk5nct5m.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"admin","param":null,"prefetchHints":0,"slots":{"children":{"name":"editar","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}}}},"staleTime":300,"buildId":"t9L88IZ5RD1muxik73Zzr"}
+:HL["/portal-clinica-dra-roseane-site/_next/static/chunks/031eogzxiqb28.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"admin","param":null,"prefetchHints":0,"slots":{"children":{"name":"editar","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}}}},"staleTime":300,"buildId":"Ea8DCyBo0J8PJWS-Tk7PW"}

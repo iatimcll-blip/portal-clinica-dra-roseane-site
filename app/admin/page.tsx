@@ -139,11 +139,11 @@ export default function AdminPage() {
   const totalGeral = totalBonus + totalComissoes
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
       {/* Sidebar */}
-      <aside style={{ width: 230, background: 'rgba(0,0,0,0.4)', borderRight: '1px solid rgba(255,255,255,0.06)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-        <div style={{ marginBottom: 20, padding: '0 8px' }}>
-          <Image src="/logo.png" alt="Logo" width={130} height={130} style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} />
+      <aside className="app-sidebar" style={{ width: 230, background: 'rgba(0,0,0,0.4)', borderRight: '1px solid rgba(255,255,255,0.06)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+        <div className="sidebar-brand" style={{ marginBottom: 20, padding: '0 8px' }}>
+          <Image src="/logo.png" alt="Logo" width={130} height={130} className="sidebar-logo" style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} />
           <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)', marginTop: 4 }}>Painel Administrativo</div>
         </div>
         <div className="nav-link active">📊 Dashboard</div>
@@ -156,14 +156,14 @@ export default function AdminPage() {
       </aside>
 
       {/* Conteúdo */}
-      <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
+      <main className="app-main" style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}><span className="gradient-text">Painel de Metas</span></h1>
             <p style={{ color: 'rgba(240,230,255,0.45)', fontSize: 14 }}>Visão geral de todas as profissionais</p>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div className="header-actions" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <select value={mesSelecionado} onChange={e => setMesSelecionado(e.target.value)} className="input-field" style={{ width: 'auto' }}>
               {MESES_LISTA.map(m => <option key={m} value={m} style={{ background: '#1a0a2e' }}>{m}</option>)}
             </select>
@@ -176,7 +176,7 @@ export default function AdminPage() {
         ) : (
           <>
             {/* Cards resumo */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 24 }}>
+            <div className="responsive-grid summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 24 }}>
               {[
                 { label: 'Faturamento do Mês', valor: formatBRL(totalRealizado), icon: '💰', cor: '#f472b6' },
                 { label: 'Meta Clínica', valor: formatBRL(cfg.meta_clinica), icon: '🎯', cor: '#c084fc' },
@@ -194,7 +194,7 @@ export default function AdminPage() {
             </div>
 
             {/* Metas */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 24 }}>
+            <div className="responsive-grid meta-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 24 }}>
               {[
                 { label: 'Meta Gatilho por Prof. (mín)', valor: formatBRL(cfg.meta_gatilho) },
                 { label: 'Meta Mês por Prof. (máx)', valor: formatBRL(cfg.meta_max) },
@@ -208,7 +208,7 @@ export default function AdminPage() {
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <div className="tabs-scroll" style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               {([['mensal','📅 Ranking Mensal'],['anual','🏆 Ranking Anual'],['bonus','💰 Bônus e Comissões']] as const).map(([t, label]) => (
                 <button key={t} onClick={() => setAba(t)} style={{
                   padding: '8px 18px', borderRadius: 10, border: 'none', cursor: 'pointer',
@@ -331,7 +331,7 @@ export default function AdminPage() {
                 </div>
 
                 {/* Cards totais */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+                <div className="responsive-grid bonus-total-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
                   {[
                     { label: 'Total Bônus de Meta', valor: formatBRL(totalBonus), icon: '🏆', cor: '#c084fc' },
                     { label: 'Total Vendas Avaliações', valor: formatBRL(totalVendasAvaliacao), icon: '📋', cor: '#38bdf8' },

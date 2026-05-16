@@ -83,7 +83,7 @@ export default function AlterarSenhaCard({ titulo = 'Alterar senha' }: Props) {
     <div className="glass-sm" style={{ padding: 24, marginTop: 24 }}>
       <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>{titulo}</h3>
       <form onSubmit={handleAlterarSenha}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 14 }}>
+        <div className="responsive-grid password-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 14 }}>
           <div>
             <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
               Senha atual
