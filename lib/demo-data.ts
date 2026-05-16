@@ -107,10 +107,10 @@ export function getDemoProfiles(): Profile[] {
   const mapa = new Map(DEMO_PROFILES.map(profile => [profile.id, profile]))
 
   salvos.forEach(profile => {
-    mapa.set(profile.id, { ...profile, role: 'user', ativo: true })
+    mapa.set(profile.id, { ...profile, role: 'user' })
   })
 
-  return Array.from(mapa.values()).sort((a, b) => a.nome.localeCompare(b.nome))
+  return Array.from(mapa.values()).filter(profile => profile.ativo).sort((a, b) => a.nome.localeCompare(b.nome))
 }
 
 function getResultadosAtualizados(): Resultado[] {
@@ -201,6 +201,34 @@ export function adicionarDemoProfissional(nome: string, primeiroNome?: string): 
 
   salvarStorage(DEMO_RESULTADOS_STORAGE_KEY, getResultadosAtualizados())
   return profile
+}
+
+export function atualizarDemoProfissional(id: string, nome: string, primeiroNome: string): Profile | null {
+  const todosProfiles = [...DEMO_PROFILES, ...lerStorage<Profile[]>(DEMO_PROFILES_STORAGE_KEY, [])]
+  const atual = todosProfiles.find(profile => profile.id === id)
+  if (!atual) return null
+
+  const atualizado: Profile = {
+    ...atual,
+    nome: nome.trim().replace(/\s+/g, ' '),
+    primeiro_nome: primeiroNome.trim().replace(/\s+/g, ' '),
+    role: 'user',
+    ativo: true,
+  }
+  const salvos = lerStorage<Profile[]>(DEMO_PROFILES_STORAGE_KEY, []).filter(profile => profile.id !== id)
+  salvarStorage(DEMO_PROFILES_STORAGE_KEY, [...salvos, atualizado])
+  return atualizado
+}
+
+export function excluirDemoProfissional(id: string): Profile | null {
+  const todosProfiles = [...DEMO_PROFILES, ...lerStorage<Profile[]>(DEMO_PROFILES_STORAGE_KEY, [])]
+  const atual = todosProfiles.find(profile => profile.id === id)
+  if (!atual) return null
+
+  const desativado: Profile = { ...atual, role: 'user', ativo: false }
+  const salvos = lerStorage<Profile[]>(DEMO_PROFILES_STORAGE_KEY, []).filter(profile => profile.id !== id)
+  salvarStorage(DEMO_PROFILES_STORAGE_KEY, [...salvos, desativado])
+  return desativado
 }
 
 export function getDemoProfile(id: string): Profile {

@@ -15,6 +15,8 @@ import type { Profile, ConfiguracoesMes } from '@/lib/types'
 import {
   DEMO_MODE,
   adicionarDemoProfissional,
+  atualizarDemoProfissional,
+  excluirDemoProfissional,
   getDemoConfig,
   getDemoProfiles,
   getDemoResultadosMes,
@@ -44,6 +46,9 @@ export default function EditarPage() {
   const [novoAuthId, setNovoAuthId] = useState('')
   const [adicionando, setAdicionando] = useState(false)
   const [mensagemAdicionar, setMensagemAdicionar] = useState('')
+  const [editandoProfileId, setEditandoProfileId] = useState<string | null>(null)
+  const [editNome, setEditNome] = useState('')
+  const [editPrimeiroNome, setEditPrimeiroNome] = useState('')
 
   const carregar = useCallback(async (mes: string) => {
     setLoading(true)
@@ -210,6 +215,82 @@ export default function EditarPage() {
     } catch (error) {
       console.error('Erro ao adicionar profissional', error)
       setErroSalvar('Nao foi possivel adicionar a profissional. Verifique as permissoes do admin e se o usuario ja existe no Supabase Auth.')
+    } finally {
+      setAdicionando(false)
+    }
+  }
+
+  function iniciarEdicaoProfissional(profile: Profile) {
+    setEditandoProfileId(profile.id)
+    setEditNome(profile.nome)
+    setEditPrimeiroNome(profile.primeiro_nome)
+    setErroSalvar('')
+    setMensagemAdicionar('')
+  }
+
+  async function salvarEdicaoProfissional(profileId: string) {
+    const nome = editNome.trim().replace(/\s+/g, ' ')
+    const primeiroNome = (editPrimeiroNome.trim() || nome.split(' ')[0] || '').replace(/\s+/g, ' ')
+
+    if (nome.length < 3 || primeiroNome.length < 2) {
+      setErroSalvar('Informe o nome completo e o primeiro nome da profissional.')
+      return
+    }
+
+    setAdicionando(true)
+    setErroSalvar('')
+
+    try {
+      if (DEMO_MODE) {
+        atualizarDemoProfissional(profileId, nome, primeiroNome)
+      } else {
+        const supabase = createClient()
+        const { error } = await supabase
+          .from('profiles')
+          .update({ nome, primeiro_nome: primeiroNome, ativo: true, role: 'user' })
+          .eq('id', profileId)
+
+        if (error) throw error
+      }
+
+      setEditandoProfileId(null)
+      setMensagemAdicionar('Profissional atualizada com sucesso.')
+      await carregar(mesSelecionado)
+    } catch (error) {
+      console.error('Erro ao editar profissional', error)
+      setErroSalvar('Nao foi possivel editar a profissional. Verifique as permissoes do admin.')
+    } finally {
+      setAdicionando(false)
+    }
+  }
+
+  async function excluirProfissional(profile: Profile) {
+    const confirmar = window.confirm(`Excluir ${profile.nome} dos paineis e rankings?`)
+    if (!confirmar) return
+
+    setAdicionando(true)
+    setErroSalvar('')
+    setMensagemAdicionar('')
+
+    try {
+      if (DEMO_MODE) {
+        excluirDemoProfissional(profile.id)
+      } else {
+        const supabase = createClient()
+        const { error } = await supabase
+          .from('profiles')
+          .update({ ativo: false })
+          .eq('id', profile.id)
+
+        if (error) throw error
+      }
+
+      setValores(prev => prev.filter(valor => valor.profile_id !== profile.id))
+      setMensagemAdicionar('Profissional excluida dos paineis e rankings.')
+      await carregar(mesSelecionado)
+    } catch (error) {
+      console.error('Erro ao excluir profissional', error)
+      setErroSalvar('Nao foi possivel excluir a profissional. Verifique as permissoes do admin.')
     } finally {
       setAdicionando(false)
     }
@@ -395,23 +476,65 @@ export default function EditarPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {profiles.map((prof, i) => {
-                      const v = valores[i] ?? { profile_id: prof.id, realizado: 0, comissao: 0 }
+                    {profiles.map((prof) => {
+                      const v = valores.find(valor => valor.profile_id === prof.id) ?? { profile_id: prof.id, realizado: 0, comissao: 0 }
                       const pct = calcPctMeta(v.realizado, config.meta_max)
                       const status = calcStatus(v.realizado, config.meta_gatilho, config.meta_max)
                       const bonus = calcBonus(v.realizado, config.meta_gatilho, config.meta_max, totalRealizado, config.meta_clinica)
                       const comissaoAvaliacoes = calcComissaoAvaliacoes(v.comissao)
                       const statusCls = getStatusClass(status)
+                      const editando = editandoProfileId === prof.id
 
                       return (
                         <tr key={prof.id} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                          <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' }}>{prof.nome}</td>
+                          <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 500, minWidth: 300 }}>
+                            {editando ? (
+                              <div style={{ display: 'grid', gap: 8 }}>
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  value={editNome}
+                                  onChange={e => setEditNome(e.target.value)}
+                                  style={{ padding: '8px 10px', fontSize: 13 }}
+                                />
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  value={editPrimeiroNome}
+                                  onChange={e => setEditPrimeiroNome(e.target.value)}
+                                  style={{ padding: '8px 10px', fontSize: 13 }}
+                                />
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                  <button type="button" className="btn-primary" onClick={() => salvarEdicaoProfissional(prof.id)} disabled={adicionando}
+                                    style={{ width: 'auto', padding: '7px 10px', fontSize: 12 }}>
+                                    Salvar
+                                  </button>
+                                  <button type="button" onClick={() => setEditandoProfileId(null)}
+                                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0e6ff', borderRadius: 8, padding: '7px 10px', cursor: 'pointer', fontSize: 12 }}>
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                <span style={{ whiteSpace: 'nowrap' }}>{prof.nome}</span>
+                                <button type="button" onClick={() => iniciarEdicaoProfissional(prof)}
+                                  style={{ background: 'rgba(192,132,252,0.12)', border: '1px solid rgba(192,132,252,0.22)', color: '#e9d5ff', borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>
+                                  Editar
+                                </button>
+                                <button type="button" onClick={() => excluirProfissional(prof)}
+                                  style={{ background: 'rgba(248,113,113,0.10)', border: '1px solid rgba(248,113,113,0.22)', color: '#fecaca', borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>
+                                  Excluir
+                                </button>
+                              </div>
+                            )}
+                          </td>
                           <td style={{ padding: '14px 16px' }}>
                             <input
                               type="number"
                               className="input-field"
                               value={v.realizado}
-                              onChange={e => setValores(prev => prev.map((x, idx) => idx === i ? { ...x, realizado: Number(e.target.value) } : x))}
+                              onChange={e => setValores(prev => prev.map(x => x.profile_id === prof.id ? { ...x, realizado: Number(e.target.value) } : x))}
                               style={{ width: 140, padding: '8px 12px', fontSize: 13 }}
                               step="100"
                             />
@@ -421,7 +544,7 @@ export default function EditarPage() {
                               type="number"
                               className="input-field"
                               value={v.comissao}
-                              onChange={e => setValores(prev => prev.map((x, idx) => idx === i ? { ...x, comissao: Number(e.target.value) } : x))}
+                              onChange={e => setValores(prev => prev.map(x => x.profile_id === prof.id ? { ...x, comissao: Number(e.target.value) } : x))}
                               style={{ width: 120, padding: '8px 12px', fontSize: 13 }}
                               step="100"
                             />
