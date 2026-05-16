@@ -61,6 +61,8 @@ RETURNS BOOLEAN AS $$
   );
 $$ LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = public;
 
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+
 -- PROFILES: cada um vê o próprio; admin vê todos
 DROP POLICY IF EXISTS "user_see_own_profile" ON profiles;
 CREATE POLICY "user_see_own_profile"
@@ -112,24 +114,30 @@ CREATE POLICY "admin_write_resultados"
 -- =====================================================
 -- TRIGGER: cria profile automático após signup
 -- =====================================================
-CREATE OR REPLACE FUNCTION handle_new_user()
+CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO profiles (id, nome, primeiro_nome, role)
+  INSERT INTO public.profiles (id, nome, primeiro_nome, role, ativo)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'nome', NEW.email),
     COALESCE(NEW.raw_user_meta_data->>'primeiro_nome', split_part(NEW.email, '@', 1)),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'user')
+    COALESCE(NEW.raw_user_meta_data->>'role', 'user'),
+    true
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE SET
+    nome = EXCLUDED.nome,
+    primeiro_nome = EXCLUDED.primeiro_nome,
+    role = EXCLUDED.role,
+    ativo = true;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- =====================================================
 -- DADOS INICIAIS: configurações dos 12 meses de 2025
