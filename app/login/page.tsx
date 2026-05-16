@@ -12,12 +12,20 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
+  const [mensagem, setMensagem] = useState('')
   const [loading, setLoading] = useState(false)
+  const [recuperando, setRecuperando] = useState(false)
+
+  function getRecoveryUrl() {
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
+    return `${window.location.origin}${basePath}/redefinir-senha/`
+  }
 
   async function handleLogin(e: React.SyntheticEvent) {
     e.preventDefault()
     setLoading(true)
     setErro('')
+    setMensagem('')
 
     if (DEMO_MODE) {
       if (email.toLowerCase().includes('admin')) {
@@ -50,6 +58,37 @@ export default function LoginPage() {
     router.refresh()
   }
 
+  async function handleRecuperarSenha() {
+    setErro('')
+    setMensagem('')
+
+    const emailLimpo = email.trim()
+    if (!emailLimpo) {
+      setErro('Informe seu e-mail para receber o link de recuperação.')
+      return
+    }
+
+    if (DEMO_MODE) {
+      setErro('Recuperação de senha real indisponível no modo demonstração.')
+      return
+    }
+
+    setRecuperando(true)
+    const supabase = createClient()
+    const { error } = await supabase.auth.resetPasswordForEmail(emailLimpo, {
+      redirectTo: getRecoveryUrl(),
+    })
+
+    if (error) {
+      setErro('Não foi possível enviar o e-mail de recuperação agora.')
+      setRecuperando(false)
+      return
+    }
+
+    setMensagem('Enviamos um link para redefinir sua senha. Verifique seu e-mail.')
+    setRecuperando(false)
+  }
+
   return (
     <div className="login-shell" style={{ display: 'flex', minHeight: '100vh' }}>
       <div className="login-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative' }}>
@@ -73,13 +112,28 @@ export default function LoginPage() {
                 <label style={{ display: 'block', fontSize: 13, color: 'rgba(240,230,255,0.6)', marginBottom: 8, fontWeight: 500 }}>E-mail</label>
                 <input type="text" inputMode="email" className="input-field" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
-              <div style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: 10 }}>
                 <label style={{ display: 'block', fontSize: 13, color: 'rgba(240,230,255,0.6)', marginBottom: 8, fontWeight: 500 }}>Senha</label>
                 <input type="password" className="input-field" placeholder="••••••••" value={senha} onChange={e => setSenha(e.target.value)} required />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 18 }}>
+                <button
+                  type="button"
+                  onClick={handleRecuperarSenha}
+                  disabled={recuperando}
+                  style={{ background: 'none', border: 0, color: '#f472b6', fontSize: 13, fontWeight: 600, cursor: recuperando ? 'not-allowed' : 'pointer', padding: 0 }}
+                >
+                  {recuperando ? 'Enviando...' : 'Esqueci minha senha'}
+                </button>
               </div>
               {erro && (
                 <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#f87171', marginBottom: 16 }}>
                   ⚠️ {erro}
+                </div>
+              )}
+              {mensagem && (
+                <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#86efac', marginBottom: 16 }}>
+                  {mensagem}
                 </div>
               )}
               <button type="submit" className="btn-primary" disabled={loading}>
