@@ -12,7 +12,14 @@ import {
   calcComissaoAvaliacoes, getStatusClass,
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes } from '@/lib/types'
-import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes, salvarDemoMes } from '@/lib/demo-data'
+import {
+  DEMO_MODE,
+  adicionarDemoProfissional,
+  getDemoConfig,
+  getDemoProfiles,
+  getDemoResultadosMes,
+  salvarDemoMes,
+} from '@/lib/demo-data'
 
 const ANO = 2025
 
@@ -32,6 +39,11 @@ export default function EditarPage() {
   const [saving, setSaving] = useState(false)
   const [salvo, setSalvo] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
+  const [novoNome, setNovoNome] = useState('')
+  const [novoPrimeiroNome, setNovoPrimeiroNome] = useState('')
+  const [novoAuthId, setNovoAuthId] = useState('')
+  const [adicionando, setAdicionando] = useState(false)
+  const [mensagemAdicionar, setMensagemAdicionar] = useState('')
 
   const carregar = useCallback(async (mes: string) => {
     setLoading(true)
@@ -39,7 +51,7 @@ export default function EditarPage() {
     const mesNum = mesNumero(mes)
 
     if (DEMO_MODE) {
-      const profList = DEMO_PROFILES
+      const profList = getDemoProfiles()
       const cfg = getDemoConfig(mesNum)
       const resultados = getDemoResultadosMes(mesNum)
       setProfiles(profList)
@@ -136,6 +148,73 @@ export default function EditarPage() {
     }
   }
 
+  async function handleAdicionarProfissional(event: React.SyntheticEvent) {
+    event.preventDefault()
+    setErroSalvar('')
+    setMensagemAdicionar('')
+
+    const nome = novoNome.trim().replace(/\s+/g, ' ')
+    const primeiroNome = (novoPrimeiroNome.trim() || nome.split(' ')[0] || '').replace(/\s+/g, ' ')
+
+    if (nome.length < 3 || primeiroNome.length < 2) {
+      setErroSalvar('Informe o nome completo e o primeiro nome da profissional.')
+      return
+    }
+
+    setAdicionando(true)
+
+    try {
+      if (DEMO_MODE) {
+        adicionarDemoProfissional(nome, primeiroNome)
+        setNovoNome('')
+        setNovoPrimeiroNome('')
+        setMensagemAdicionar('Profissional adicionada com metas e resultados zerados para todos os meses.')
+        await carregar(mesSelecionado)
+        return
+      }
+
+      const id = novoAuthId.trim()
+      const uuidValido = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+
+      if (!uuidValido) {
+        setErroSalvar('Informe o ID do usuario criado no Supabase Auth para vincular o acesso individual.')
+        return
+      }
+
+      const supabase = createClient()
+      const { error: profileError } = await supabase.from('profiles').upsert(
+        { id, nome, primeiro_nome: primeiroNome, role: 'user', ativo: true },
+        { onConflict: 'id' }
+      )
+
+      if (profileError) throw profileError
+
+      const { error: resultadosError } = await supabase.from('resultados').upsert(
+        Array.from({ length: 12 }, (_, index) => ({
+          profile_id: id,
+          mes: index + 1,
+          ano: ANO,
+          realizado: 0,
+          comissao_avaliacoes: 0,
+        })),
+        { onConflict: 'profile_id,mes,ano' }
+      )
+
+      if (resultadosError) throw resultadosError
+
+      setNovoNome('')
+      setNovoPrimeiroNome('')
+      setNovoAuthId('')
+      setMensagemAdicionar('Profissional adicionada e liberada nas metas, rankings e painel individual.')
+      await carregar(mesSelecionado)
+    } catch (error) {
+      console.error('Erro ao adicionar profissional', error)
+      setErroSalvar('Nao foi possivel adicionar a profissional. Verifique as permissoes do admin e se o usuario ja existe no Supabase Auth.')
+    } finally {
+      setAdicionando(false)
+    }
+  }
+
   async function handleSair() {
     if (DEMO_MODE) {
       router.push('/login')
@@ -218,6 +297,63 @@ export default function EditarPage() {
           <div style={{ textAlign: 'center', padding: 60, color: 'rgba(240,230,255,0.4)' }}>Carregando...</div>
         ) : (
           <>
+            <form onSubmit={handleAdicionarProfissional} className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Adicionar profissional</h3>
+              <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
+                A nova profissional entra ativa, com acesso individual e resultados zerados para seguir as mesmas regras de metas, ranking, bonus e comissoes.
+              </p>
+              <div className="responsive-grid edit-config-grid" style={{ display: 'grid', gridTemplateColumns: DEMO_MODE ? '1.5fr 1fr auto' : '1.3fr 0.8fr 1.5fr auto', gap: 12, alignItems: 'end' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
+                    Nome completo
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={novoNome}
+                    onChange={e => setNovoNome(e.target.value)}
+                    placeholder="Nome da profissional"
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
+                    Primeiro nome
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={novoPrimeiroNome}
+                    onChange={e => setNovoPrimeiroNome(e.target.value)}
+                    placeholder="Ex.: Ana"
+                  />
+                </div>
+                {!DEMO_MODE && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
+                      ID do usuario no Supabase Auth
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      value={novoAuthId}
+                      onChange={e => setNovoAuthId(e.target.value)}
+                      placeholder="UUID do acesso individual"
+                      required
+                    />
+                  </div>
+                )}
+                <button type="submit" className="btn-primary" style={{ width: 'auto', padding: '10px 18px' }} disabled={adicionando}>
+                  {adicionando ? 'Adicionando...' : 'Adicionar'}
+                </button>
+              </div>
+              {mensagemAdicionar && (
+                <div style={{ marginTop: 12, color: '#86efac', fontSize: 13 }}>
+                  {mensagemAdicionar}
+                </div>
+              )}
+            </form>
+
             <div className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 20 }}>⚙️ Configurações do Mês — {mesSelecionado}</h3>
               <div className="responsive-grid edit-config-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>

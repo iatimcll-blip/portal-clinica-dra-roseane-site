@@ -12,7 +12,7 @@ import {
   getMedalEmoji, getStatusClass,
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes } from '@/lib/types'
-import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
+import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
 
 const ANO = 2025
 
@@ -70,7 +70,7 @@ export default function PainelProfissional() {
     if (DEMO_MODE) {
       queueMicrotask(() => {
         const storedId = localStorage.getItem('demo_user_id')
-        const prof = storedId ? getDemoProfile(storedId) : DEMO_PROFILES[0]
+        const prof = storedId ? getDemoProfile(storedId) : getDemoProfiles()[0]
         setProfile(prof)
         setProfileId(prof.id)
       })

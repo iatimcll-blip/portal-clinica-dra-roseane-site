@@ -14,7 +14,7 @@ import {
 } from '@/lib/formulas'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import AlterarSenhaCard from '@/components/AlterarSenhaCard'
-import { DEMO_MODE, DEMO_PROFILES, getDemoConfig, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
+import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 
 type Aba = 'mensal' | 'anual' | 'bonus'
 
@@ -34,7 +34,7 @@ export default function AdminPage() {
     setLoading(true)
 
     if (DEMO_MODE) {
-      setProfiles(DEMO_PROFILES)
+      setProfiles(getDemoProfiles())
       setConfig(getDemoConfig(mesNum))
       setResultados(getDemoResultadosMes(mesNum))
       setTodosResultados(getDemoResultadosAnual(12))

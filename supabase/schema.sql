@@ -54,9 +54,16 @@ CREATE POLICY "admin_see_all_profiles"
   ON profiles FOR SELECT
   USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
 
+DROP POLICY IF EXISTS "admin_update_profiles" ON profiles;
 CREATE POLICY "admin_update_profiles"
   ON profiles FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+
+DROP POLICY IF EXISTS "admin_insert_profiles" ON profiles;
+CREATE POLICY "admin_insert_profiles"
+  ON profiles FOR INSERT
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
 
 -- CONFIGURACOES_MES: todos autenticados leem; só admin escreve
 CREATE POLICY "authenticated_read_config"

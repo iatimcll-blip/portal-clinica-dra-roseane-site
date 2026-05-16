@@ -18,6 +18,7 @@ export const DEMO_PROFILES: Profile[] = [
   { id: '55555555-5555-5555-5555-555555555555', nome: 'Tayane Borges De Sousa', primeiro_nome: 'Tayane', role: 'user', ativo: true },
 ]
 
+const DEMO_PROFILES_STORAGE_KEY = 'clinica_roseane_demo_profiles_v1'
 const CONFIG_BY_MONTH: Record<number, Omit<ConfiguracoesMes, 'id' | 'mes' | 'ano'>> = {
   1: { meta_clinica: 55000, meta_gatilho: 15000, meta_max: 18000, meta_individual_anual: 187000 },
   2: { meta_clinica: 45900, meta_gatilho: 13250, meta_max: 15900, meta_individual_anual: 187000 },
@@ -101,6 +102,17 @@ function getConfigSalva(): Record<string, ConfiguracoesMes> {
   return lerStorage<Record<string, ConfiguracoesMes>>(DEMO_CONFIG_STORAGE_KEY, {})
 }
 
+export function getDemoProfiles(): Profile[] {
+  const salvos = lerStorage<Profile[]>(DEMO_PROFILES_STORAGE_KEY, [])
+  const mapa = new Map(DEMO_PROFILES.map(profile => [profile.id, profile]))
+
+  salvos.forEach(profile => {
+    mapa.set(profile.id, { ...profile, role: 'user', ativo: true })
+  })
+
+  return Array.from(mapa.values()).sort((a, b) => a.nome.localeCompare(b.nome))
+}
+
 function getResultadosAtualizados(): Resultado[] {
   const mapa = new Map(DEMO_RESULTADOS.map(resultado => [chaveResultado(resultado), resultado]))
   const salvos = lerStorage<Resultado[]>(DEMO_RESULTADOS_STORAGE_KEY, [])
@@ -108,6 +120,22 @@ function getResultadosAtualizados(): Resultado[] {
   salvos.forEach(resultado => {
     const chave = chaveResultado(resultado)
     mapa.set(chave, { ...mapa.get(chave), ...resultado })
+  })
+
+  getDemoProfiles().forEach(profile => {
+    for (let mes = 1; mes <= 12; mes += 1) {
+      const resultado = { profile_id: profile.id, ano: 2025, mes }
+      const chave = chaveResultado(resultado)
+
+      if (!mapa.has(chave)) {
+        mapa.set(chave, {
+          ...resultado,
+          id: 100000 + mapa.size,
+          realizado: 0,
+          comissao_avaliacoes: 0,
+        })
+      }
+    }
   })
 
   return Array.from(mapa.values())
@@ -157,11 +185,29 @@ export function salvarDemoMes(config: ConfiguracoesMes, valores: ValorDemo[], me
   salvarStorage(DEMO_RESULTADOS_STORAGE_KEY, Array.from(mapa.values()))
 }
 
+export function adicionarDemoProfissional(nome: string, primeiroNome?: string): Profile {
+  const nomeLimpo = nome.trim().replace(/\s+/g, ' ')
+  const primeiroNomeLimpo = (primeiroNome?.trim() || nomeLimpo.split(' ')[0] || 'Profissional').replace(/\s+/g, ' ')
+  const profile: Profile = {
+    id: `demo-${Date.now()}`,
+    nome: nomeLimpo,
+    primeiro_nome: primeiroNomeLimpo,
+    role: 'user',
+    ativo: true,
+  }
+
+  const salvos = lerStorage<Profile[]>(DEMO_PROFILES_STORAGE_KEY, [])
+  salvarStorage(DEMO_PROFILES_STORAGE_KEY, [...salvos, profile])
+
+  salvarStorage(DEMO_RESULTADOS_STORAGE_KEY, getResultadosAtualizados())
+  return profile
+}
+
 export function getDemoProfile(id: string): Profile {
-  return DEMO_PROFILES.find(p => p.id === id) ?? DEMO_PROFILES[0]
+  return getDemoProfiles().find(p => p.id === id) ?? getDemoProfiles()[0]
 }
 
 export function matchDemoProfileByEmail(email: string): Profile {
   const lower = email.toLowerCase()
-  return DEMO_PROFILES.find(p => lower.includes(p.primeiro_nome.toLowerCase())) ?? DEMO_PROFILES[0]
+  return getDemoProfiles().find(p => lower.includes(p.primeiro_nome.toLowerCase())) ?? getDemoProfiles()[0]
 }
