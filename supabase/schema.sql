@@ -34,9 +34,13 @@ CREATE TABLE IF NOT EXISTS resultados (
   ano                  INTEGER NOT NULL DEFAULT 2025,
   realizado            NUMERIC(12,2) NOT NULL DEFAULT 0,
   comissao_avaliacoes  NUMERIC(12,2) NOT NULL DEFAULT 0,
+  nota_feedback        NUMERIC(4,2) NOT NULL DEFAULT 0 CHECK (nota_feedback BETWEEN 0 AND 10),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(profile_id, mes, ano)
 );
+
+ALTER TABLE resultados
+  ADD COLUMN IF NOT EXISTS nota_feedback NUMERIC(4,2) NOT NULL DEFAULT 0 CHECK (nota_feedback BETWEEN 0 AND 10);
 
 -- =====================================================
 -- ROW LEVEL SECURITY

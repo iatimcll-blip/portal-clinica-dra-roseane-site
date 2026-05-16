@@ -72,7 +72,7 @@ export const DEMO_RESULTADOS: Resultado[] = RAW.map((r, i) => ({ ...r, id: i + 1
 const DEMO_CONFIG_STORAGE_KEY = 'clinica_roseane_demo_configuracoes_v1'
 const DEMO_RESULTADOS_STORAGE_KEY = 'clinica_roseane_demo_resultados_v1'
 
-type ValorDemo = { profile_id: string; realizado: number; comissao: number }
+type ValorDemo = { profile_id: string; realizado: number; comissao: number; feedback: number }
 
 function storageDisponivel(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -133,6 +133,7 @@ function getResultadosAtualizados(): Resultado[] {
           id: 100000 + mapa.size,
           realizado: 0,
           comissao_avaliacoes: 0,
+          nota_feedback: 0,
         })
       }
     }
@@ -179,6 +180,7 @@ export function salvarDemoMes(config: ConfiguracoesMes, valores: ValorDemo[], me
       ano,
       realizado: Number.isFinite(valor.realizado) ? valor.realizado : 0,
       comissao_avaliacoes: Number.isFinite(valor.comissao) ? valor.comissao : 0,
+      nota_feedback: Number.isFinite(valor.feedback) ? Math.max(0, Math.min(10, valor.feedback)) : 0,
     })
   })
 

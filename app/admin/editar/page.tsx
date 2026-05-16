@@ -25,7 +25,7 @@ import {
 
 const ANO = 2025
 
-type ValorProf = { profile_id: string; realizado: number; comissao: number }
+type ValorProf = { profile_id: string; realizado: number; comissao: number; feedback: number }
 
 const CONFIG_PADRAO: ConfiguracoesMes = {
   id: 0, mes: 1, ano: ANO, meta_clinica: 80000, meta_gatilho: 8000, meta_max: 12000, meta_individual_anual: 120000,
@@ -49,6 +49,7 @@ export default function EditarPage() {
   const [editandoProfileId, setEditandoProfileId] = useState<string | null>(null)
   const [editNome, setEditNome] = useState('')
   const [editPrimeiroNome, setEditPrimeiroNome] = useState('')
+  const [confirmandoExclusaoId, setConfirmandoExclusaoId] = useState<string | null>(null)
 
   const carregar = useCallback(async (mes: string) => {
     setLoading(true)
@@ -63,7 +64,7 @@ export default function EditarPage() {
       setConfig(cfg)
       setValores(profList.map(p => {
         const r = resultados.find(x => x.profile_id === p.id)
-        return { profile_id: p.id, realizado: r?.realizado ?? 0, comissao: r?.comissao_avaliacoes ?? 0 }
+        return { profile_id: p.id, realizado: r?.realizado ?? 0, comissao: r?.comissao_avaliacoes ?? 0, feedback: r?.nota_feedback ?? 0 }
       }))
       setLoading(false)
       return
@@ -99,7 +100,7 @@ export default function EditarPage() {
     setConfig(cfg ? cfg : { ...CONFIG_PADRAO, mes: mesNum })
     setValores(profList.map(p => {
       const r = resultados?.find(x => x.profile_id === p.id)
-      return { profile_id: p.id, realizado: r?.realizado ?? 0, comissao: r?.comissao_avaliacoes ?? 0 }
+      return { profile_id: p.id, realizado: r?.realizado ?? 0, comissao: r?.comissao_avaliacoes ?? 0, feedback: r?.nota_feedback ?? 0 }
     }))
     setLoading(false)
   }, [router])
@@ -136,6 +137,7 @@ export default function EditarPage() {
           ano: ANO,
           realizado: v.realizado,
           comissao_avaliacoes: v.comissao,
+          nota_feedback: v.feedback,
         })),
         { onConflict: 'profile_id,mes,ano' }
       )
@@ -201,6 +203,7 @@ export default function EditarPage() {
           ano: ANO,
           realizado: 0,
           comissao_avaliacoes: 0,
+          nota_feedback: 0,
         })),
         { onConflict: 'profile_id,mes,ano' }
       )
@@ -265,9 +268,6 @@ export default function EditarPage() {
   }
 
   async function excluirProfissional(profile: Profile) {
-    const confirmar = window.confirm(`Excluir ${profile.nome} dos paineis e rankings?`)
-    if (!confirmar) return
-
     setAdicionando(true)
     setErroSalvar('')
     setMensagemAdicionar('')
@@ -286,6 +286,7 @@ export default function EditarPage() {
       }
 
       setValores(prev => prev.filter(valor => valor.profile_id !== profile.id))
+      setConfirmandoExclusaoId(null)
       setMensagemAdicionar('Profissional excluida dos paineis e rankings.')
       await carregar(mesSelecionado)
     } catch (error) {
@@ -310,6 +311,8 @@ export default function EditarPage() {
   const totalRealizado = valores.reduce((s, v) => s + v.realizado, 0)
   const totalBonus = valores.reduce((s, v) => s + calcBonus(v.realizado, config.meta_gatilho, config.meta_max, totalRealizado, config.meta_clinica), 0)
   const totalComissaoAvaliacoes = valores.reduce((s, v) => s + calcComissaoAvaliacoes(v.comissao), 0)
+  const notasFeedback = valores.map(v => v.feedback).filter(nota => nota > 0)
+  const mediaFeedback = notasFeedback.length > 0 ? notasFeedback.reduce((s, nota) => s + nota, 0) / notasFeedback.length : 0
   const pctClinica = config.meta_clinica > 0 ? ((totalRealizado / config.meta_clinica) * 100).toFixed(1) : '0.0'
   const metaClinicaBatida = totalRealizado >= config.meta_clinica
 
@@ -470,14 +473,14 @@ export default function EditarPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                      {['Profissional', 'Realizado (R$)', 'Vendas Avaliações (R$)', 'Comissão 7%', '% Meta', 'Status', 'Bônus (calc.)'].map(h => (
+                      {['Profissional', 'Realizado (R$)', 'Vendas Avaliações (R$)', 'Feedback (1-10)', 'Comissão 7%', '% Meta', 'Status', 'Bônus (calc.)'].map(h => (
                         <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {profiles.map((prof) => {
-                      const v = valores.find(valor => valor.profile_id === prof.id) ?? { profile_id: prof.id, realizado: 0, comissao: 0 }
+                      const v = valores.find(valor => valor.profile_id === prof.id) ?? { profile_id: prof.id, realizado: 0, comissao: 0, feedback: 0 }
                       const pct = calcPctMeta(v.realizado, config.meta_max)
                       const status = calcStatus(v.realizado, config.meta_gatilho, config.meta_max)
                       const bonus = calcBonus(v.realizado, config.meta_gatilho, config.meta_max, totalRealizado, config.meta_clinica)
@@ -522,10 +525,23 @@ export default function EditarPage() {
                                   style={{ background: 'rgba(192,132,252,0.12)', border: '1px solid rgba(192,132,252,0.22)', color: '#e9d5ff', borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>
                                   Editar
                                 </button>
-                                <button type="button" onClick={() => excluirProfissional(prof)}
-                                  style={{ background: 'rgba(248,113,113,0.10)', border: '1px solid rgba(248,113,113,0.22)', color: '#fecaca', borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>
-                                  Excluir
-                                </button>
+                                {confirmandoExclusaoId === prof.id ? (
+                                  <>
+                                    <button type="button" onClick={() => excluirProfissional(prof)} disabled={adicionando}
+                                      style={{ background: 'rgba(248,113,113,0.18)', border: '1px solid rgba(248,113,113,0.35)', color: '#fecaca', borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>
+                                      Confirmar
+                                    </button>
+                                    <button type="button" onClick={() => setConfirmandoExclusaoId(null)}
+                                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0e6ff', borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>
+                                      Cancelar
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button type="button" onClick={() => setConfirmandoExclusaoId(prof.id)}
+                                    style={{ background: 'rgba(248,113,113,0.10)', border: '1px solid rgba(248,113,113,0.22)', color: '#fecaca', borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>
+                                    Excluir
+                                  </button>
+                                )}
                               </div>
                             )}
                           </td>
@@ -549,6 +565,18 @@ export default function EditarPage() {
                               step="100"
                             />
                           </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <input
+                              type="number"
+                              className="input-field"
+                              value={v.feedback}
+                              onChange={e => setValores(prev => prev.map(x => x.profile_id === prof.id ? { ...x, feedback: Math.max(0, Math.min(10, Number(e.target.value))) } : x))}
+                              style={{ width: 110, padding: '8px 12px', fontSize: 13 }}
+                              min="0"
+                              max="10"
+                              step="0.1"
+                            />
+                          </td>
                           <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 600, color: '#facc15', whiteSpace: 'nowrap' }}>{formatBRL(comissaoAvaliacoes)}</td>
                           <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 600 }}>{pct}%</td>
                           <td style={{ padding: '14px 16px' }}>
@@ -567,11 +595,12 @@ export default function EditarPage() {
 
             <div className="glass-sm" style={{ padding: 24, marginTop: 24 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>📋 Resumo Calculado Automaticamente</h3>
-              <div className="responsive-grid edit-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+              <div className="responsive-grid edit-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16 }}>
                 {[
                   { label: 'Total Realizado', valor: formatBRL(totalRealizado), cor: '#f472b6' },
                   { label: 'Total Bônus', valor: formatBRL(totalBonus), cor: '#c084fc' },
                   { label: 'Comissão Avaliações', valor: formatBRL(totalComissaoAvaliacoes), cor: '#facc15' },
+                  { label: 'Média Feedback', valor: mediaFeedback > 0 ? mediaFeedback.toFixed(1) : 'Sem notas', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
                   { label: '% Meta Clínica', valor: `${pctClinica}%`, cor: Number(pctClinica) >= 100 ? '#4ade80' : '#facc15' },
                   { label: 'Regra abaixo gatilho', valor: metaClinicaBatida ? 'MGM atingida' : 'MGM não atingida', cor: metaClinicaBatida ? '#4ade80' : '#f87171' },
                 ].map((c, i) => (

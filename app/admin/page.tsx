@@ -91,7 +91,7 @@ export default function AdminPage() {
   const cfg = config ?? { meta_clinica: 55000, meta_gatilho: 15000, meta_max: 18000, meta_individual_anual: 187000 }
 
   function getRes(profileId: string) {
-    return resultados.find(r => r.profile_id === profileId) ?? { realizado: 0, comissao_avaliacoes: 0, profile_id: profileId, mes: mesNum, ano: 2025 }
+    return resultados.find(r => r.profile_id === profileId) ?? { realizado: 0, comissao_avaliacoes: 0, nota_feedback: 0, profile_id: profileId, mes: mesNum, ano: 2025 }
   }
 
   const totalRealizado = profiles.reduce((s, p) => s + getRes(p.id).realizado, 0)
@@ -110,6 +110,7 @@ export default function AdminPage() {
         realizado: r.realizado,
         vendas_avaliacoes: vendasAvaliacoes,
         comissao_avaliacoes: calcComissaoAvaliacoes(vendasAvaliacoes),
+        nota_feedback: r.nota_feedback ?? 0,
         pctGatilho: calcPctGatilho(r.realizado, cfg.meta_gatilho),
         pctMeta: calcPctMeta(r.realizado, cfg.meta_max),
         status: calcStatus(r.realizado, cfg.meta_gatilho, cfg.meta_max),
@@ -137,6 +138,8 @@ export default function AdminPage() {
   const totalBonus = rankingMensal.reduce((s, p) => s + p.bonus, 0)
   const totalVendasAvaliacao = rankingMensal.reduce((s, p) => s + p.vendas_avaliacoes, 0)
   const totalGeral = totalBonus + totalComissoes
+  const notasFeedback = rankingMensal.map(p => p.nota_feedback ?? 0).filter(nota => nota > 0)
+  const mediaFeedback = notasFeedback.length > 0 ? notasFeedback.reduce((s, nota) => s + nota, 0) / notasFeedback.length : 0
 
   return (
     <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
@@ -184,6 +187,7 @@ export default function AdminPage() {
                 { label: 'Falta p/ Meta', valor: formatBRL(faltaClinica), icon: 'R$', cor: faltaClinica === 0 ? '#4ade80' : '#facc15' },
                 { label: 'Ticket Médio / Prof.', valor: formatBRL(ticketMedio), icon: 'TM', cor: '#38bdf8' },
                 { label: 'Comissão Avaliações (7%)', valor: formatBRL(totalComissoes), icon: '7%', cor: '#facc15' },
+                { label: 'Média Feedback do Mês', valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem notas', icon: 'FB', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm" style={{ padding: 20 }}>
                   <div style={{ fontSize: 24, marginBottom: 8 }}>{c.icon}</div>

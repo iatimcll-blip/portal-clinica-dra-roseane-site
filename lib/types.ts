@@ -25,6 +25,7 @@ export type Resultado = {
   ano: number
   realizado: number
   comissao_avaliacoes: number
+  nota_feedback?: number
 }
 
 export type ResultadoRanking = {
@@ -34,6 +35,7 @@ export type ResultadoRanking = {
   primeiro_nome: string
   realizado: number
   comissao_avaliacoes: number
+  nota_feedback?: number
   pctGatilho: number
   pctMeta: number
   status: string
