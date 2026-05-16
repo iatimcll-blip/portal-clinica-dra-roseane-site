@@ -34,11 +34,7 @@ export default function AlterarSenhaCard({ titulo = 'Alterar senha' }: Props) {
     setSalvando(true)
 
     if (DEMO_MODE) {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      setSenhaAtual('')
-      setNovaSenha('')
-      setConfirmarSenha('')
-      setMensagem('Senha validada no modo demonstração.')
+      setErro('A troca de senha real esta desativada porque o site esta em modo demonstracao. Configure o Supabase real e NEXT_PUBLIC_DEMO_MODE=false.')
       setSalvando(false)
       return
     }
@@ -82,6 +78,11 @@ export default function AlterarSenhaCard({ titulo = 'Alterar senha' }: Props) {
   return (
     <div className="glass-sm" style={{ padding: 24, marginTop: 24 }}>
       <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>{titulo}</h3>
+      {DEMO_MODE && (
+        <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#facc15', marginBottom: 14 }}>
+          Troca de senha real indisponivel enquanto o site estiver em modo demonstracao.
+        </div>
+      )}
       <form onSubmit={handleAlterarSenha}>
         <div className="responsive-grid password-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 14 }}>
           <div>

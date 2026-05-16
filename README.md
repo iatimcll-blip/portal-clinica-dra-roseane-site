@@ -77,7 +77,7 @@ Para publicar com dados reais, cadastre estas variáveis no GitHub em Settings >
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave pública anon do Supabase |
 | `NEXT_PUBLIC_DEMO_MODE` | `false` |
 
-Se quiser publicar primeiro em modo demonstração, mantenha `NEXT_PUBLIC_DEMO_MODE=true`.
+Para troca de senha real funcionar, o site precisa estar com `NEXT_PUBLIC_DEMO_MODE=false` e as chaves reais do Supabase. Em modo demonstração a senha não é alterada no banco.
 
 ## Dados importados
 
