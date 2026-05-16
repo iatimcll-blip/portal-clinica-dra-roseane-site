@@ -50,48 +50,64 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE configuracoes_mes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resultados ENABLE ROW LEVEL SECURITY;
 
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.role = 'admin'
+      AND p.ativo = true
+  );
+$$ LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = public;
+
 -- PROFILES: cada um vê o próprio; admin vê todos
+DROP POLICY IF EXISTS "user_see_own_profile" ON profiles;
 CREATE POLICY "user_see_own_profile"
   ON profiles FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "admin_see_all_profiles" ON profiles;
 CREATE POLICY "admin_see_all_profiles"
   ON profiles FOR SELECT
-  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+  USING (public.is_admin());
 
 DROP POLICY IF EXISTS "admin_update_profiles" ON profiles;
 CREATE POLICY "admin_update_profiles"
   ON profiles FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'))
-  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 
 DROP POLICY IF EXISTS "admin_insert_profiles" ON profiles;
 CREATE POLICY "admin_insert_profiles"
   ON profiles FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+  WITH CHECK (public.is_admin());
 
 -- CONFIGURACOES_MES: todos autenticados leem; só admin escreve
+DROP POLICY IF EXISTS "authenticated_read_config" ON configuracoes_mes;
 CREATE POLICY "authenticated_read_config"
   ON configuracoes_mes FOR SELECT TO authenticated USING (true);
 
 DROP POLICY IF EXISTS "admin_write_config" ON configuracoes_mes;
 CREATE POLICY "admin_write_config"
   ON configuracoes_mes FOR ALL
-  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'))
-  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 
 -- RESULTADOS: user vê só os próprios; admin vê e edita todos
+DROP POLICY IF EXISTS "user_see_own_resultados" ON resultados;
 CREATE POLICY "user_see_own_resultados"
   ON resultados FOR SELECT USING (profile_id = auth.uid());
 
+DROP POLICY IF EXISTS "admin_see_all_resultados" ON resultados;
 CREATE POLICY "admin_see_all_resultados"
   ON resultados FOR SELECT
-  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+  USING (public.is_admin());
 
 DROP POLICY IF EXISTS "admin_write_resultados" ON resultados;
 CREATE POLICY "admin_write_resultados"
   ON resultados FOR ALL
-  USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'))
-  WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 
 -- =====================================================
 -- TRIGGER: cria profile automático após signup
