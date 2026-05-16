@@ -15,6 +15,7 @@ import {
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
+import { assetPath } from '@/lib/asset-path'
 
 type Aba = 'mensal' | 'anual' | 'bonus'
 
@@ -146,7 +147,7 @@ export default function AdminPage() {
       {/* Sidebar */}
       <aside className="app-sidebar" style={{ width: 230, background: 'rgba(0,0,0,0.4)', borderRight: '1px solid rgba(255,255,255,0.06)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
         <div className="sidebar-brand" style={{ marginBottom: 20, padding: '0 8px' }}>
-          <Image src="/logo.png" alt="Logo" width={130} height={130} className="sidebar-logo" style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} />
+          <Image src={assetPath('/logo.png')} alt="Logo" width={130} height={130} className="sidebar-logo" style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} />
           <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)', marginTop: 4 }}>Painel Administrativo</div>
         </div>
         <div className="nav-link active">📊 Dashboard</div>

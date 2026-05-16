@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import { createClient } from '@/lib/supabase/client'
+import { assetPath } from '@/lib/asset-path'
 import {
   MESES_LISTA, mesNumero, formatBRL, calcBonus, calcStatus, calcPctMeta,
   calcComissaoAvaliacoes, getStatusClass,
@@ -324,7 +325,7 @@ export default function EditarPage() {
       }}>
         <div className="sidebar-brand" style={{ marginBottom: 24, padding: '0 8px' }}>
           <div style={{ marginBottom: 8 }}>
-            <Image src="/logo.png" alt="Roseane Débora Centro Estético" width={130} height={130}
+            <Image src={assetPath('/logo.png')} alt="Roseane Débora Centro Estético" width={130} height={130}
               style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} />
           </div>
           <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)' }}>Painel Administrativo</div>

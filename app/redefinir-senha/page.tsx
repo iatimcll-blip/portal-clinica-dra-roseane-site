@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
+import { assetPath } from '@/lib/asset-path'
 
 export default function RedefinirSenhaPage() {
   const [novaSenha, setNovaSenha] = useState('')
@@ -106,7 +107,7 @@ export default function RedefinirSenhaPage() {
         <div style={{ width: '100%', maxWidth: 420 }}>
           <div className="login-brand" style={{ textAlign: 'center', marginBottom: 32 }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-              <Image src="/logo.png" alt="Roseane Débora Centro Estético" width={180} height={180}
+              <Image src={assetPath('/logo.png')} alt="Roseane Débora Centro Estético" width={180} height={180}
                 style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} priority />
             </div>
             <p style={{ color: 'rgba(240,230,255,0.5)', fontSize: 14 }}>Painel de Acompanhamento de Metas</p>

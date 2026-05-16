@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import { assetPath } from '@/lib/asset-path'
 
 export default function DecoracaoDireita() {
   return (
@@ -35,7 +36,7 @@ export default function DecoracaoDireita() {
 
       {/* Foto */}
       <Image
-        src="/Debora.png"
+        src={assetPath('/Debora.png')}
         alt="Dra. Roseane Débora"
         fill
         style={{
