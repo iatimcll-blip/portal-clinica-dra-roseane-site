@@ -8,14 +8,13 @@ import { createClient } from '@/lib/supabase/client'
 import type { Profile, ConfiguracoesMes, Resultado } from '@/lib/types'
 import {
   MESES_LISTA, formatBRL, getStatusClass, getProgressColor,
-  getMedalEmoji, calcBonus, calcStatus, calcPctGatilho,
-  calcPctMeta, getMensagem, getMensagemAnual, mesNumero,
-  calcComissaoAvaliacoes, calcTotalReceber,
+  getMedalEmoji, calcPctMeta, mesNumero,
 } from '@/lib/formulas'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
+import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
 
 type Aba = 'mensal' | 'anual' | 'bonus'
 
@@ -92,7 +91,7 @@ export default function AdminPage() {
   const cfg = config ?? { meta_clinica: 55000, meta_gatilho: 15000, meta_max: 18000, meta_individual_anual: 187000 }
 
   function getRes(profileId: string) {
-    return resultados.find(r => r.profile_id === profileId) ?? { realizado: 0, comissao_avaliacoes: 0, nota_feedback: 0, profile_id: profileId, mes: mesNum, ano: 2025 }
+    return resultadoDoMes(resultados, profileId, mesNum, 2025)
   }
 
   const totalRealizado = profiles.reduce((s, p) => s + getRes(p.id).realizado, 0)
@@ -100,38 +99,8 @@ export default function AdminPage() {
   const ticketMedio = profiles.length > 0 ? totalRealizado / profiles.length : 0
   const metaClinicaBatida = totalRealizado >= cfg.meta_clinica
 
-  // Ranking mensal ordenado
-  const rankingMensal = [...profiles]
-    .map(p => {
-      const r = getRes(p.id)
-      const vendasAvaliacoes = r.comissao_avaliacoes ?? 0
-      const bonus = calcBonus(r.realizado, cfg.meta_gatilho, cfg.meta_max, totalRealizado, cfg.meta_clinica)
-      return {
-        ...p,
-        realizado: r.realizado,
-        vendas_avaliacoes: vendasAvaliacoes,
-        comissao_avaliacoes: calcComissaoAvaliacoes(vendasAvaliacoes),
-        nota_feedback: r.nota_feedback ?? 0,
-        pctGatilho: calcPctGatilho(r.realizado, cfg.meta_gatilho),
-        pctMeta: calcPctMeta(r.realizado, cfg.meta_max),
-        status: calcStatus(r.realizado, cfg.meta_gatilho, cfg.meta_max),
-        bonus,
-        totalReceber: calcTotalReceber(bonus, vendasAvaliacoes),
-      }
-    })
-    .sort((a, b) => b.realizado - a.realizado)
-    .map((p, i) => ({ ...p, pos: i + 1, mensagem: getMensagem(i + 1) }))
-
-  // Ranking anual acumulado
-  const rankingAnual = [...profiles]
-    .map(p => {
-      const acumulado = todosResultados
-        .filter(r => r.profile_id === p.id)
-        .reduce((s, r) => s + r.realizado, 0)
-      return { ...p, acumulado, pctMeta: calcPctMeta(acumulado, cfg.meta_individual_anual), falta: Math.max(0, cfg.meta_individual_anual - acumulado) }
-    })
-    .sort((a, b) => b.acumulado - a.acumulado)
-    .map((p, i) => ({ ...p, pos: i + 1, mensagem: getMensagemAnual(i + 1) }))
+  const rankingMensal = calcularRankingMensal(profiles, resultados, cfg, mesNum, 2025)
+  const rankingAnual = calcularRankingAnual(profiles, todosResultados, cfg.meta_individual_anual, 2025)
 
   const pctClinica = calcPctMeta(totalRealizado, cfg.meta_clinica)
   const totalComissoes = rankingMensal.reduce((s, p) => s + p.comissao_avaliacoes, 0)

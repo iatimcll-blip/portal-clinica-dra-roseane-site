@@ -17,6 +17,17 @@ import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDem
 
 const ANO = 2025
 
+type DashboardProfissional = {
+  realizado: number
+  comissao_avaliacoes: number
+  nota_feedback: number
+  acumulado_anual: number
+  media_feedback: number
+  posicao_mensal: number
+  posicao_anual: number
+  total_clinica: number
+}
+
 export default function PainelProfissional() {
   const router = useRouter()
   const [mesSelecionado, setMesSelecionado] = useState(MESES_LISTA[new Date().getMonth()])
@@ -28,6 +39,8 @@ export default function PainelProfissional() {
   const [mediaFeedback, setMediaFeedback] = useState(0)
   const [acumuladoAnual, setAcumuladoAnual] = useState(0)
   const [posicao, setPosicao] = useState(1)
+  const [posicaoAnual, setPosicaoAnual] = useState(1)
+  const [totalClinicaMes, setTotalClinicaMes] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string) => {
@@ -42,41 +55,42 @@ export default function PainelProfissional() {
         .filter(x => x.profile_id === uid && (x.nota_feedback ?? 0) > 0)
         .map(x => x.nota_feedback ?? 0)
       const sorted = [...resMes].sort((a, b) => b.realizado - a.realizado)
+      const sortedAnual = getDemoProfiles()
+        .map(p => ({
+          profile_id: p.id,
+          acumulado: resAnual.filter(x => x.profile_id === p.id).reduce((s, x) => s + x.realizado, 0),
+        }))
+        .sort((a, b) => b.acumulado - a.acumulado)
       const idx = sorted.findIndex(x => x.profile_id === uid)
+      const idxAnual = sortedAnual.findIndex(x => x.profile_id === uid)
       setConfig(cfg)
       setRealizado(r?.realizado ?? 0)
       setNotaFeedback(r?.nota_feedback ?? 0)
       setMediaFeedback(notas.length > 0 ? notas.reduce((s, nota) => s + nota, 0) / notas.length : 0)
       setAcumuladoAnual(acum)
       setPosicao(idx >= 0 ? idx + 1 : 1)
+      setPosicaoAnual(idxAnual >= 0 ? idxAnual + 1 : 1)
+      setTotalClinicaMes(resMes.reduce((s, x) => s + x.realizado, 0))
       return
     }
 
     const supabase = createClient()
     const mesNum = mesNumero(mes)
 
-    const [{ data: cfg }, { data: res }, { data: anual }, { data: rankData }] = await Promise.all([
+    const [{ data: cfg }, { data: painelRaw }] = await Promise.all([
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO).single(),
-      supabase.from('resultados').select('realizado, nota_feedback').eq('profile_id', uid).eq('mes', mesNum).eq('ano', ANO).single(),
-      supabase.from('resultados').select('profile_id, realizado, nota_feedback').eq('ano', ANO).lte('mes', mesNum),
-      supabase.from('resultados').select('profile_id, realizado').eq('mes', mesNum).eq('ano', ANO).order('realizado', { ascending: false }),
+      supabase.rpc('get_professional_dashboard', { p_mes: mesNum, p_ano: ANO }).single(),
     ])
+    const painel = painelRaw as DashboardProfissional | null
 
     setConfig(cfg ?? null)
-    setRealizado(res?.realizado ?? 0)
-    setNotaFeedback(res?.nota_feedback ?? 0)
-
-    const acum = (anual ?? []).filter(r => r.profile_id === uid).reduce((s, r) => s + r.realizado, 0)
-    const notas = (anual ?? [])
-      .filter(r => r.profile_id === uid && (r.nota_feedback ?? 0) > 0)
-      .map(r => r.nota_feedback ?? 0)
-    setAcumuladoAnual(acum)
-    setMediaFeedback(notas.length > 0 ? notas.reduce((s, nota) => s + nota, 0) / notas.length : 0)
-
-    if (rankData) {
-      const idx = rankData.findIndex(r => r.profile_id === uid)
-      setPosicao(idx >= 0 ? idx + 1 : 1)
-    }
+    setRealizado(painel?.realizado ?? 0)
+    setNotaFeedback(painel?.nota_feedback ?? 0)
+    setAcumuladoAnual(painel?.acumulado_anual ?? 0)
+    setMediaFeedback(painel?.media_feedback ?? 0)
+    setPosicao(painel?.posicao_mensal ?? 1)
+    setPosicaoAnual(painel?.posicao_anual ?? 1)
+    setTotalClinicaMes(painel?.total_clinica ?? 0)
   }, [])
 
   useEffect(() => {
@@ -123,7 +137,7 @@ export default function PainelProfissional() {
   const metaGatilho = config?.meta_gatilho ?? 0
   const metaMax = config?.meta_max ?? 0
   const metaAnual = config?.meta_individual_anual ?? 120000
-  const bonus = calcBonus(realizado, metaGatilho, metaMax)
+  const bonus = calcBonus(realizado, metaGatilho, metaMax, totalClinicaMes, config?.meta_clinica ?? Number.POSITIVE_INFINITY)
   const status = calcStatus(realizado, metaGatilho, metaMax)
   const pctGatilho = calcPctGatilho(realizado, metaGatilho)
   const pctMeta = calcPctMeta(realizado, metaMax)
@@ -292,8 +306,12 @@ export default function PainelProfissional() {
             </div>
           </div>
 
+          <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.45)', marginTop: 12 }}>
+            Posição anual: <strong style={{ color: '#c084fc' }}>{posicaoAnual}º</strong>
+          </div>
+
           <div style={{ fontSize: 14, color: '#c084fc', fontStyle: 'italic', marginTop: 12 }}>
-            ✨ {getMensagemAnual(posicao)}
+            ✨ {getMensagemAnual(posicaoAnual)}
           </div>
         </div>
 
