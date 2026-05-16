@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
+import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import { createClient } from '@/lib/supabase/client'
 import {
   MESES_LISTA, mesNumero, formatBRL, calcBonus, calcStatus,
@@ -278,6 +279,7 @@ export default function PainelProfissional() {
           <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)', marginBottom: 8 }}>💬 Mensagem do mês</div>
           <div style={{ fontSize: 15, color: '#f0e6ff', lineHeight: 1.6 }}>{getMensagem(posicao)}</div>
         </div>
+        <AlterarSenhaCard />
       </main>
 
       <DecoracaoDireita />

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
+import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import { createClient } from '@/lib/supabase/client'
 import {
   MESES_LISTA, mesNumero, formatBRL, calcBonus, calcStatus, calcPctMeta,
@@ -295,6 +296,8 @@ export default function EditarPage() {
                 ))}
               </div>
             </div>
+
+            <AlterarSenhaCard />
           </>
         )}
       </main>
