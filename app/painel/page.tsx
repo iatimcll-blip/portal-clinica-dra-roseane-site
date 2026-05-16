@@ -23,6 +23,8 @@ export default function PainelProfissional() {
   const [profileId, setProfileId] = useState<string | null>(null)
   const [config, setConfig] = useState<ConfiguracoesMes | null>(null)
   const [realizado, setRealizado] = useState(0)
+  const [notaFeedback, setNotaFeedback] = useState(0)
+  const [mediaFeedback, setMediaFeedback] = useState(0)
   const [acumuladoAnual, setAcumuladoAnual] = useState(0)
   const [posicao, setPosicao] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -35,10 +37,15 @@ export default function PainelProfissional() {
       const resAnual = getDemoResultadosAnual(mesNum)
       const r = resMes.find(x => x.profile_id === uid)
       const acum = resAnual.filter(x => x.profile_id === uid).reduce((s, x) => s + x.realizado, 0)
+      const notas = resAnual
+        .filter(x => x.profile_id === uid && (x.nota_feedback ?? 0) > 0)
+        .map(x => x.nota_feedback ?? 0)
       const sorted = [...resMes].sort((a, b) => b.realizado - a.realizado)
       const idx = sorted.findIndex(x => x.profile_id === uid)
       setConfig(cfg)
       setRealizado(r?.realizado ?? 0)
+      setNotaFeedback(r?.nota_feedback ?? 0)
+      setMediaFeedback(notas.length > 0 ? notas.reduce((s, nota) => s + nota, 0) / notas.length : 0)
       setAcumuladoAnual(acum)
       setPosicao(idx >= 0 ? idx + 1 : 1)
       return
@@ -49,16 +56,21 @@ export default function PainelProfissional() {
 
     const [{ data: cfg }, { data: res }, { data: anual }, { data: rankData }] = await Promise.all([
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO).single(),
-      supabase.from('resultados').select('realizado').eq('profile_id', uid).eq('mes', mesNum).eq('ano', ANO).single(),
-      supabase.from('resultados').select('profile_id, realizado').eq('ano', ANO).lte('mes', mesNum),
+      supabase.from('resultados').select('realizado, nota_feedback').eq('profile_id', uid).eq('mes', mesNum).eq('ano', ANO).single(),
+      supabase.from('resultados').select('profile_id, realizado, nota_feedback').eq('ano', ANO).lte('mes', mesNum),
       supabase.from('resultados').select('profile_id, realizado').eq('mes', mesNum).eq('ano', ANO).order('realizado', { ascending: false }),
     ])
 
     setConfig(cfg ?? null)
     setRealizado(res?.realizado ?? 0)
+    setNotaFeedback(res?.nota_feedback ?? 0)
 
     const acum = (anual ?? []).filter(r => r.profile_id === uid).reduce((s, r) => s + r.realizado, 0)
+    const notas = (anual ?? [])
+      .filter(r => r.profile_id === uid && (r.nota_feedback ?? 0) > 0)
+      .map(r => r.nota_feedback ?? 0)
     setAcumuladoAnual(acum)
+    setMediaFeedback(notas.length > 0 ? notas.reduce((s, nota) => s + nota, 0) / notas.length : 0)
 
     if (rankData) {
       const idx = rankData.findIndex(r => r.profile_id === uid)
@@ -200,6 +212,19 @@ export default function PainelProfissional() {
           ].map((c, i) => (
             <div key={i} className="glass-sm" style={{ padding: 24, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>{c.icon}</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: c.cor, marginBottom: 4 }}>{c.valor}</div>
+              <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)' }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="responsive-grid professional-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 24 }}>
+          {[
+            { label: `Feedback em ${mesSelecionado}`, valor: notaFeedback > 0 ? `${notaFeedback.toFixed(1)}/10` : 'Sem nota', icon: 'FB', cor: notaFeedback >= 8 ? '#4ade80' : notaFeedback >= 6 ? '#facc15' : '#f87171' },
+            { label: `Média Feedback até ${mesSelecionado}`, valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem média', icon: 'MF', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
+          ].map((c, i) => (
+            <div key={i} className="glass-sm" style={{ padding: 24, textAlign: 'center' }}>
+              <div style={{ fontSize: 24, marginBottom: 8, fontWeight: 800, color: c.cor }}>{c.icon}</div>
               <div style={{ fontSize: 26, fontWeight: 700, color: c.cor, marginBottom: 4 }}>{c.valor}</div>
               <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)' }}>{c.label}</div>
             </div>
