@@ -79,6 +79,8 @@ Para publicar com dados reais, cadastre estas variáveis no GitHub em Settings >
 
 Para troca de senha real funcionar, o site precisa estar com `NEXT_PUBLIC_DEMO_MODE=false` e as chaves reais do Supabase. Em modo demonstração a senha não é alterada no banco.
 
+O workflow do GitHub Pages não publica mais automaticamente em modo demonstração. Se `NEXT_PUBLIC_DEMO_MODE` estiver diferente de `true`, o deploy exige `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`; sem essas variáveis reais o build falha para evitar um site que pareça real mas não salve autenticação.
+
 ## Dados importados
 
 Os dados de metas e resultados foram extraídos de:
