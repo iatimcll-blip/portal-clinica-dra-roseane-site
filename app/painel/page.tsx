@@ -52,7 +52,7 @@ export default function PainelProfissional() {
   const [totalClinicaMes, setTotalClinicaMes] = useState(0)
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
   const [erroMateriais, setErroMateriais] = useState('')
-  const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; url: string } | null>(null)
+  const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; baseUrl: string; pagina: number } | null>(null)
   const [carregandoPdf, setCarregandoPdf] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -230,8 +230,15 @@ export default function PainelProfissional() {
     }
 
     setErroMateriais('')
-    setVisualizadorPdf({ materialId: material.id, titulo: material.titulo, url: `${data.signedUrl}#toolbar=1&navpanes=0&view=FitH` })
+    setVisualizadorPdf({ materialId: material.id, titulo: material.titulo, baseUrl: data.signedUrl, pagina: 1 })
     setCarregandoPdf(false)
+  }
+
+  function mudarPaginaPdf(delta: number) {
+    setVisualizadorPdf(atual => {
+      if (!atual) return atual
+      return { ...atual, pagina: Math.max(1, atual.pagina + delta) }
+    })
   }
 
   const metaGatilho = config?.meta_gatilho ?? 0
@@ -517,20 +524,39 @@ export default function PainelProfissional() {
           </div>
 
           {(visualizadorPdf || carregandoPdf) && (
-            <div style={{ marginTop: 18, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, overflow: 'hidden', background: 'rgba(0,0,0,0.18)' }}>
-              <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {visualizadorPdf?.titulo ?? 'Carregando documento...'}
+            <div className="material-viewer-panel">
+              <div className="material-viewer-header">
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {visualizadorPdf?.titulo ?? 'Carregando documento...'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginTop: 3 }}>
+                    O documento fica aberto aqui no painel. Use os botões para seguir ou voltar páginas.
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginTop: 3 }}>
-                  O documento fica aberto aqui no painel. Role para passar página por página.
-                </div>
+                {visualizadorPdf && (
+                  <div className="material-page-controls">
+                    <button
+                      type="button"
+                      onClick={() => mudarPaginaPdf(-1)}
+                      disabled={visualizadorPdf.pagina <= 1}
+                      className="material-page-button"
+                    >
+                      Voltar página
+                    </button>
+                    <div className="material-page-counter">Página {visualizadorPdf.pagina}</div>
+                    <button type="button" onClick={() => mudarPaginaPdf(1)} className="material-page-button">
+                      Próxima página
+                    </button>
+                  </div>
+                )}
               </div>
               {visualizadorPdf ? (
                 <iframe
-                  src={visualizadorPdf.url}
+                  key={`${visualizadorPdf.materialId}-${visualizadorPdf.pagina}`}
+                  src={`${visualizadorPdf.baseUrl}#toolbar=1&navpanes=0&view=FitH&page=${visualizadorPdf.pagina}`}
                   title={visualizadorPdf.titulo}
-                  style={{ width: '100%', height: 'min(78vh, 760px)', minHeight: 520, border: 0, background: '#1f1f1f', display: 'block' }}
+                  className="material-viewer-frame"
                 />
               ) : (
                 <div style={{ minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(240,230,255,0.45)', fontSize: 14 }}>
