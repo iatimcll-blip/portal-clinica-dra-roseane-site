@@ -41,6 +41,7 @@ export default function PainelProfissional() {
   const [acumuladoAnual, setAcumuladoAnual] = useState(0)
   const [posicao, setPosicao] = useState(1)
   const [posicaoAnual, setPosicaoAnual] = useState(1)
+  const [rankingDisponivel, setRankingDisponivel] = useState(true)
   const [totalClinicaMes, setTotalClinicaMes] = useState(0)
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
   const [erroMateriais, setErroMateriais] = useState('')
@@ -75,6 +76,7 @@ export default function PainelProfissional() {
       setAcumuladoAnual(acum)
       setPosicao(idx >= 0 ? idx + 1 : 1)
       setPosicaoAnual(idxAnual >= 0 ? idxAnual + 1 : 1)
+      setRankingDisponivel(true)
       setTotalClinicaMes(resMes.reduce((s, x) => s + x.realizado, 0))
       setMateriais([])
       return
@@ -83,12 +85,47 @@ export default function PainelProfissional() {
     const supabase = createClient()
     const mesNum = mesNumero(mes)
 
-    const [{ data: cfg }, { data: painelRaw }, { data: materiaisData, error: materiaisError }] = await Promise.all([
+    const [{ data: cfg }, { data: painelRaw, error: painelError }, { data: materiaisData, error: materiaisError }] = await Promise.all([
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO).single(),
       supabase.rpc('get_professional_dashboard', { p_mes: mesNum, p_ano: ANO }).single(),
       supabase.from('materiais_informativos').select('*').eq('ativo', true).order('created_at', { ascending: false }),
     ])
-    const painel = painelRaw as DashboardProfissional | null
+
+    let painel = painelRaw as DashboardProfissional | null
+
+    if (painelError) {
+      const [{ data: resultadoMes }, { data: resultadosAno }] = await Promise.all([
+        supabase
+          .from('resultados')
+          .select('realizado,comissao_avaliacoes,nota_feedback')
+          .eq('profile_id', uid)
+          .eq('mes', mesNum)
+          .eq('ano', ANO)
+          .maybeSingle(),
+        supabase
+          .from('resultados')
+          .select('realizado,nota_feedback')
+          .eq('profile_id', uid)
+          .eq('ano', ANO),
+      ])
+
+      const ano = resultadosAno ?? []
+      const notas = ano.map(r => r.nota_feedback ?? 0).filter(nota => nota > 0)
+
+      painel = {
+        realizado: resultadoMes?.realizado ?? 0,
+        comissao_avaliacoes: resultadoMes?.comissao_avaliacoes ?? 0,
+        nota_feedback: resultadoMes?.nota_feedback ?? 0,
+        acumulado_anual: ano.reduce((s, r) => s + (r.realizado ?? 0), 0),
+        media_feedback: notas.length > 0 ? notas.reduce((s, nota) => s + nota, 0) / notas.length : 0,
+        posicao_mensal: 1,
+        posicao_anual: 1,
+        total_clinica: resultadoMes?.realizado ?? 0,
+      }
+      setRankingDisponivel(false)
+    } else {
+      setRankingDisponivel(true)
+    }
 
     setConfig(cfg ?? null)
     setRealizado(painel?.realizado ?? 0)
@@ -259,8 +296,10 @@ export default function PainelProfissional() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16,
         }}>
           <div>
-            <div style={{ fontSize: 48, fontWeight: 800, lineHeight: 1 }}>{getMedalEmoji(posicao)}</div>
-            <div style={{ fontSize: 14, color: 'rgba(240,230,255,0.5)', marginTop: 8 }}>Posição no ranking mensal</div>
+            <div style={{ fontSize: 48, fontWeight: 800, lineHeight: 1 }}>{rankingDisponivel ? getMedalEmoji(posicao) : '—'}</div>
+            <div style={{ fontSize: 14, color: 'rgba(240,230,255,0.5)', marginTop: 8 }}>
+              {rankingDisponivel ? 'Posição no ranking mensal' : 'Ranking mensal aguardando atualização'}
+            </div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 32, fontWeight: 800, color: '#f472b6' }}>{formatBRL(realizado)}</div>
@@ -359,11 +398,11 @@ export default function PainelProfissional() {
           </div>
 
           <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.45)', marginTop: 12 }}>
-            Posição anual: <strong style={{ color: '#c084fc' }}>{posicaoAnual}º</strong>
+            Posição anual: <strong style={{ color: '#c084fc' }}>{rankingDisponivel ? `${posicaoAnual}º` : 'aguardando atualização'}</strong>
           </div>
 
           <div style={{ fontSize: 14, color: '#c084fc', fontStyle: 'italic', marginTop: 12 }}>
-            ✨ {getMensagemAnual(posicaoAnual)}
+            ✨ {rankingDisponivel ? getMensagemAnual(posicaoAnual) : 'Seu acumulado anual já está atualizado; a posição geral será exibida após atualizar a função de ranking.'}
           </div>
         </div>
 
@@ -373,7 +412,9 @@ export default function PainelProfissional() {
           borderRadius: 16, padding: 24,
         }}>
           <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)', marginBottom: 8 }}>💬 Mensagem do mês</div>
-          <div style={{ fontSize: 15, color: '#f0e6ff', lineHeight: 1.6 }}>{getMensagem(posicao)}</div>
+          <div style={{ fontSize: 15, color: '#f0e6ff', lineHeight: 1.6 }}>
+            {rankingDisponivel ? getMensagem(posicao) : 'Seus valores e metas já estão atualizados. A posição do ranking depende da função de ranking no Supabase.'}
+          </div>
         </div>
         <div className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>📎 Materiais informativos</h3>
