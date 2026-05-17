@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import AlterarSenhaCard from '@/components/AlterarSenhaCard'
+import PdfPageViewer from '@/components/PdfPageViewer'
 import { createClient } from '@/lib/supabase/client'
 import { assetPath } from '@/lib/asset-path'
 import {
@@ -53,6 +54,7 @@ export default function PainelProfissional() {
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
   const [erroMateriais, setErroMateriais] = useState('')
   const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; baseUrl: string; pagina: number } | null>(null)
+  const [totalPaginasPdf, setTotalPaginasPdf] = useState(0)
   const [carregandoPdf, setCarregandoPdf] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -231,13 +233,15 @@ export default function PainelProfissional() {
 
     setErroMateriais('')
     setVisualizadorPdf({ materialId: material.id, titulo: material.titulo, baseUrl: data.signedUrl, pagina: 1 })
+    setTotalPaginasPdf(0)
     setCarregandoPdf(false)
   }
 
   function mudarPaginaPdf(delta: number) {
     setVisualizadorPdf(atual => {
       if (!atual) return atual
-      return { ...atual, pagina: Math.max(1, atual.pagina + delta) }
+      const proxima = Math.max(1, atual.pagina + delta)
+      return { ...atual, pagina: totalPaginasPdf > 0 ? Math.min(proxima, totalPaginasPdf) : proxima }
     })
   }
 
@@ -544,19 +548,25 @@ export default function PainelProfissional() {
                     >
                       Voltar página
                     </button>
-                    <div className="material-page-counter">Página {visualizadorPdf.pagina}</div>
-                    <button type="button" onClick={() => mudarPaginaPdf(1)} className="material-page-button">
+                    <div className="material-page-counter">Página {visualizadorPdf.pagina}{totalPaginasPdf > 0 ? ` de ${totalPaginasPdf}` : ''}</div>
+                    <button
+                      type="button"
+                      onClick={() => mudarPaginaPdf(1)}
+                      disabled={totalPaginasPdf > 0 && visualizadorPdf.pagina >= totalPaginasPdf}
+                      className="material-page-button"
+                    >
                       Próxima página
                     </button>
                   </div>
                 )}
               </div>
               {visualizadorPdf ? (
-                <iframe
-                  key={`${visualizadorPdf.materialId}-${visualizadorPdf.pagina}`}
-                  src={`${visualizadorPdf.baseUrl}#toolbar=1&navpanes=0&view=FitH&page=${visualizadorPdf.pagina}`}
+                <PdfPageViewer
+                  key={visualizadorPdf.materialId}
+                  page={visualizadorPdf.pagina}
                   title={visualizadorPdf.titulo}
-                  className="material-viewer-frame"
+                  url={visualizadorPdf.baseUrl}
+                  onPageCount={setTotalPaginasPdf}
                 />
               ) : (
                 <div style={{ minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(240,230,255,0.45)', fontSize: 14 }}>
