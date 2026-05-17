@@ -97,7 +97,7 @@ export default function PainelProfissional() {
     setPosicaoAnual(painel?.posicao_anual ?? 1)
     setTotalClinicaMes(painel?.total_clinica ?? 0)
     setMateriais(materiaisData ?? [])
-    setErroMateriais(materiaisError ? 'Materiais informativos ainda não configurados.' : '')
+    setErroMateriais(materiaisError ? 'Materiais informativos ainda não configurados no Supabase.' : '')
   }, [])
 
   useEffect(() => {

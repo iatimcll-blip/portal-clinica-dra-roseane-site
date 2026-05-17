@@ -19,6 +19,8 @@ import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/l
 type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
 
 const BUCKET_MATERIAIS = 'materiais-informativos'
+const LIMITE_MATERIAL_BYTES = 50 * 1024 * 1024
+const EXTENSOES_MATERIAIS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'csv', 'mp4', 'mov', 'zip']
 
 export default function AdminPage() {
   const router = useRouter()
@@ -71,7 +73,7 @@ export default function AdminPage() {
       return
     }
 
-    const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }, { data: mats }] = await Promise.all([
+    const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }, { data: mats, error: matsError }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', 2025).single(),
       supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', 2025),
@@ -84,6 +86,7 @@ export default function AdminPage() {
     setResultados(res ?? [])
     setTodosResultados(anuais ?? [])
     setMateriais(mats ?? [])
+    setErroMaterial(matsError ? mensagemErroMateriais(matsError.message, matsError.code) : '')
     setLoading(false)
   }, [mesNum, router])
 
@@ -106,6 +109,33 @@ export default function AdminPage() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`
   }
 
+  function mensagemErroMateriais(message?: string, code?: string) {
+    if (code === 'PGRST205' || message?.toLowerCase().includes('materiais_informativos')) {
+      return 'A área de materiais ainda não foi criada no Supabase. Execute o arquivo supabase/fix_materiais_informativos.sql no SQL Editor.'
+    }
+    if (message?.toLowerCase().includes('bucket not found')) {
+      return 'O armazenamento de materiais ainda não foi criado no Supabase. Execute o arquivo supabase/fix_materiais_informativos.sql no SQL Editor.'
+    }
+    if (message?.toLowerCase().includes('row-level security')) {
+      return 'O Supabase bloqueou a ação pelas regras de acesso. Reaplique o arquivo supabase/fix_materiais_informativos.sql no SQL Editor.'
+    }
+    return 'Não foi possível acessar os materiais informativos agora.'
+  }
+
+  function validarArquivoMaterial(arquivo: File) {
+    const extensao = arquivo.name.split('.').pop()?.toLowerCase() ?? ''
+    if (!EXTENSOES_MATERIAIS.includes(extensao)) {
+      return 'Formato não permitido. Use PDF, Word, Excel, PowerPoint, imagem, texto, CSV, vídeo ou ZIP.'
+    }
+    if (arquivo.size > LIMITE_MATERIAL_BYTES) {
+      return 'Arquivo muito grande. O limite por anexo é de 50 MB.'
+    }
+    if (extensao === 'pdf' && arquivo.type && arquivo.type !== 'application/pdf') {
+      return 'O arquivo selecionado tem extensão PDF, mas o navegador não identificou como PDF válido.'
+    }
+    return ''
+  }
+
   async function handleUploadMaterial(e: React.SyntheticEvent) {
     e.preventDefault()
     setMensagemMaterial('')
@@ -118,6 +148,12 @@ export default function AdminPage() {
 
     if (!arquivoMaterial) {
       setErroMaterial('Selecione um arquivo para anexar.')
+      return
+    }
+
+    const erroValidacao = validarArquivoMaterial(arquivoMaterial)
+    if (erroValidacao) {
+      setErroMaterial(erroValidacao)
       return
     }
 
@@ -138,7 +174,7 @@ export default function AdminPage() {
       })
 
     if (uploadError) {
-      setErroMaterial('Não foi possível enviar o arquivo. Verifique se o bucket e as políticas foram criados no Supabase.')
+      setErroMaterial(mensagemErroMateriais(uploadError.message))
       setSalvandoMaterial(false)
       return
     }
@@ -155,7 +191,7 @@ export default function AdminPage() {
 
     if (insertError) {
       await supabase.storage.from(BUCKET_MATERIAIS).remove([filePath])
-      setErroMaterial('Arquivo enviado, mas não foi possível salvar o registro informativo.')
+      setErroMaterial(mensagemErroMateriais(insertError.message, insertError.code))
       setSalvandoMaterial(false)
       return
     }
