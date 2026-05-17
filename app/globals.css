@@ -247,6 +247,13 @@ body {
     font-size: 13px;
   }
 
+  .professional-photo-panel {
+    width: 138px !important;
+    min-width: 138px;
+    padding: 0 !important;
+    flex: 0 0 138px;
+  }
+
   .app-main {
     width: 100% !important;
     padding: 18px 14px 28px !important;

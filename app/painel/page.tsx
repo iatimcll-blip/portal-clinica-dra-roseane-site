@@ -17,6 +17,13 @@ import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDem
 
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
+const FOTOS_PROFISSIONAIS: Record<string, string> = {
+  erica: '/erica.png',
+  gilmara: '/Gilmara.png',
+  kelly: '/Kelly.png',
+  maria: '/Maria.png',
+  tayane: '/Tayane.png',
+}
 
 type DashboardProfissional = {
   realizado: number
@@ -202,6 +209,10 @@ export default function PainelProfissional() {
     return material.file_type === 'application/pdf' || material.file_name.toLowerCase().endsWith('.pdf')
   }
 
+  function fotoProfissional() {
+    return FOTOS_PROFISSIONAIS[profile?.primeiro_nome?.toLowerCase() ?? '']
+  }
+
   async function carregarVisualizacaoPdf(material: MaterialInformativo) {
     if (!isPdfMaterial(material)) {
       setErroMateriais('A visualização dentro do painel está disponível para arquivos PDF.')
@@ -257,6 +268,48 @@ export default function PainelProfissional() {
         </div>
 
         <div className="nav-link active">📊 Meu Painel</div>
+
+        {fotoProfissional() && (
+          <div className="professional-photo-panel" style={{ padding: '6px 8px 0', width: '100%' }}>
+            <div style={{
+              position: 'relative',
+              width: '100%',
+              aspectRatio: '4 / 5',
+              borderRadius: 18,
+              overflow: 'hidden',
+              border: '1px solid rgba(244,114,182,0.22)',
+              background: 'rgba(255,255,255,0.04)',
+              boxShadow: '0 18px 48px rgba(0,0,0,0.35)',
+            }}>
+              <Image
+                src={assetPath(fotoProfissional()!)}
+                alt={`Foto de ${profile.primeiro_nome}`}
+                fill
+                sizes="180px"
+                style={{ objectFit: 'cover', objectPosition: 'center top' }}
+                priority
+              />
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'linear-gradient(180deg, rgba(8,2,16,0.02) 44%, rgba(8,2,16,0.72) 100%)',
+              }} />
+              <div style={{
+                position: 'absolute',
+                left: 12,
+                right: 12,
+                bottom: 12,
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.45)' }}>
+                  {profile.primeiro_nome}
+                </div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0 }}>
+                  Profissional
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
           <div style={{ padding: '0 8px', marginBottom: 12 }}>
