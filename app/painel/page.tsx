@@ -44,7 +44,8 @@ export default function PainelProfissional() {
   const [totalClinicaMes, setTotalClinicaMes] = useState(0)
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
   const [erroMateriais, setErroMateriais] = useState('')
-  const [visualizadorPdf, setVisualizadorPdf] = useState<{ titulo: string; url: string } | null>(null)
+  const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; url: string } | null>(null)
+  const [carregandoPdf, setCarregandoPdf] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string) => {
@@ -130,6 +131,18 @@ export default function PainelProfissional() {
     })
   }, [mesSelecionado, profileId, carregar])
 
+  useEffect(() => {
+    const primeiroPdf = materiais.find(isPdfMaterial)
+    if (!primeiroPdf) {
+      queueMicrotask(() => setVisualizadorPdf(null))
+      return
+    }
+
+    if (!visualizadorPdf || !materiais.some(material => material.id === visualizadorPdf.materialId)) {
+      queueMicrotask(() => carregarVisualizacaoPdf(primeiroPdf))
+    }
+  }, [materiais, visualizadorPdf]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleSair() {
     if (DEMO_MODE) {
       localStorage.removeItem('demo_user_id')
@@ -152,21 +165,25 @@ export default function PainelProfissional() {
     return material.file_type === 'application/pdf' || material.file_name.toLowerCase().endsWith('.pdf')
   }
 
-  async function handleAbrirMaterial(material: MaterialInformativo) {
+  async function carregarVisualizacaoPdf(material: MaterialInformativo) {
+    if (!isPdfMaterial(material)) {
+      setErroMateriais('A visualização dentro do painel está disponível para arquivos PDF.')
+      return
+    }
+
+    setCarregandoPdf(true)
     const supabase = createClient()
-    const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(material.file_path, 60 * 10)
+    const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(material.file_path, 60 * 60)
 
     if (error || !data?.signedUrl) {
       setErroMateriais('Não foi possível abrir este material agora.')
+      setCarregandoPdf(false)
       return
     }
 
-    if (isPdfMaterial(material)) {
-      setVisualizadorPdf({ titulo: material.titulo, url: `${data.signedUrl}#toolbar=1&navpanes=0&view=FitH` })
-      return
-    }
-
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    setErroMateriais('')
+    setVisualizadorPdf({ materialId: material.id, titulo: material.titulo, url: `${data.signedUrl}#toolbar=1&navpanes=0&view=FitH` })
+    setCarregandoPdf(false)
   }
 
   const metaGatilho = config?.meta_gatilho ?? 0
@@ -378,8 +395,23 @@ export default function PainelProfissional() {
                   {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
                   <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
                 </div>
-                <button type="button" onClick={() => handleAbrirMaterial(material)} style={{ background: 'linear-gradient(135deg,#be185d,#7c3aed)', border: 0, color: 'white', borderRadius: 10, padding: '10px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                  Abrir arquivo
+                <button
+                  type="button"
+                  onClick={() => carregarVisualizacaoPdf(material)}
+                  disabled={!isPdfMaterial(material) || carregandoPdf}
+                  style={{
+                    background: visualizadorPdf?.materialId === material.id ? 'rgba(74,222,128,0.16)' : 'linear-gradient(135deg,#be185d,#7c3aed)',
+                    border: visualizadorPdf?.materialId === material.id ? '1px solid rgba(74,222,128,0.28)' : 0,
+                    color: visualizadorPdf?.materialId === material.id ? '#86efac' : 'white',
+                    borderRadius: 10,
+                    padding: '10px 14px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: isPdfMaterial(material) ? 'pointer' : 'not-allowed',
+                    opacity: isPdfMaterial(material) ? 1 : 0.55,
+                  }}
+                >
+                  {isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
                 </button>
               </div>
             ))}
@@ -389,65 +421,33 @@ export default function PainelProfissional() {
               </div>
             )}
           </div>
+
+          {(visualizadorPdf || carregandoPdf) && (
+            <div style={{ marginTop: 18, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, overflow: 'hidden', background: 'rgba(0,0,0,0.18)' }}>
+              <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {visualizadorPdf?.titulo ?? 'Carregando documento...'}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginTop: 3 }}>
+                  O documento fica aberto aqui no painel. Role para passar página por página.
+                </div>
+              </div>
+              {visualizadorPdf ? (
+                <iframe
+                  src={visualizadorPdf.url}
+                  title={visualizadorPdf.titulo}
+                  style={{ width: '100%', height: 'min(78vh, 760px)', minHeight: 520, border: 0, background: '#1f1f1f', display: 'block' }}
+                />
+              ) : (
+                <div style={{ minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(240,230,255,0.45)', fontSize: 14 }}>
+                  Preparando visualização...
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <AlterarSenhaCard />
       </main>
-
-      {visualizadorPdf && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Visualização de ${visualizadorPdf.titulo}`}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 50,
-            background: 'rgba(5,0,12,0.86)',
-            backdropFilter: 'blur(10px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 16,
-          }}
-        >
-          <div
-            style={{
-              width: 'min(1100px, 100%)',
-              height: 'min(860px, 92vh)',
-              background: '#12071d',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 16,
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 24px 80px rgba(0,0,0,0.45)',
-            }}
-          >
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {visualizadorPdf.titulo}
-                </div>
-                <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginTop: 2 }}>
-                  Use a barra de rolagem para passar página por página.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setVisualizadorPdf(null)}
-                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#f0e6ff', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
-              >
-                Fechar
-              </button>
-            </div>
-            <iframe
-              src={visualizadorPdf.url}
-              title={visualizadorPdf.titulo}
-              style={{ width: '100%', height: '100%', border: 0, background: '#1f1f1f' }}
-            />
-          </div>
-        </div>
-      )}
 
       <DecoracaoDireita />
     </div>
