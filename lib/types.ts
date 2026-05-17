@@ -54,3 +54,15 @@ export type RankingAnualItem = {
   falta: number
   mensagem: string
 }
+
+export type MaterialInformativo = {
+  id: number
+  titulo: string
+  descricao: string | null
+  file_name: string
+  file_path: string
+  file_type: string | null
+  file_size: number | null
+  ativo: boolean
+  created_at: string
+}

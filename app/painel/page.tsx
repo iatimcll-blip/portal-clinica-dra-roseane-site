@@ -12,10 +12,11 @@ import {
   calcPctGatilho, calcPctMeta, getMensagem, getMensagemAnual,
   getMedalEmoji, getStatusClass,
 } from '@/lib/formulas'
-import type { Profile, ConfiguracoesMes } from '@/lib/types'
+import type { Profile, ConfiguracoesMes, MaterialInformativo } from '@/lib/types'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
 
 const ANO = 2025
+const BUCKET_MATERIAIS = 'materiais-informativos'
 
 type DashboardProfissional = {
   realizado: number
@@ -41,6 +42,8 @@ export default function PainelProfissional() {
   const [posicao, setPosicao] = useState(1)
   const [posicaoAnual, setPosicaoAnual] = useState(1)
   const [totalClinicaMes, setTotalClinicaMes] = useState(0)
+  const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
+  const [erroMateriais, setErroMateriais] = useState('')
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string) => {
@@ -71,15 +74,17 @@ export default function PainelProfissional() {
       setPosicao(idx >= 0 ? idx + 1 : 1)
       setPosicaoAnual(idxAnual >= 0 ? idxAnual + 1 : 1)
       setTotalClinicaMes(resMes.reduce((s, x) => s + x.realizado, 0))
+      setMateriais([])
       return
     }
 
     const supabase = createClient()
     const mesNum = mesNumero(mes)
 
-    const [{ data: cfg }, { data: painelRaw }] = await Promise.all([
+    const [{ data: cfg }, { data: painelRaw }, { data: materiaisData, error: materiaisError }] = await Promise.all([
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO).single(),
       supabase.rpc('get_professional_dashboard', { p_mes: mesNum, p_ano: ANO }).single(),
+      supabase.from('materiais_informativos').select('*').eq('ativo', true).order('created_at', { ascending: false }),
     ])
     const painel = painelRaw as DashboardProfissional | null
 
@@ -91,6 +96,8 @@ export default function PainelProfissional() {
     setPosicao(painel?.posicao_mensal ?? 1)
     setPosicaoAnual(painel?.posicao_anual ?? 1)
     setTotalClinicaMes(painel?.total_clinica ?? 0)
+    setMateriais(materiaisData ?? [])
+    setErroMateriais(materiaisError ? 'Materiais informativos ainda não configurados.' : '')
   }, [])
 
   useEffect(() => {
@@ -132,6 +139,24 @@ export default function PainelProfissional() {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  function formatFileSize(bytes?: number | null) {
+    if (!bytes) return 'Tamanho não informado'
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  }
+
+  async function handleAbrirMaterial(material: MaterialInformativo) {
+    const supabase = createClient()
+    const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(material.file_path, 60 * 10)
+
+    if (error || !data?.signedUrl) {
+      setErroMateriais('Não foi possível abrir este material agora.')
+      return
+    }
+
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
   const metaGatilho = config?.meta_gatilho ?? 0
@@ -322,6 +347,38 @@ export default function PainelProfissional() {
         }}>
           <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)', marginBottom: 8 }}>💬 Mensagem do mês</div>
           <div style={{ fontSize: 15, color: '#f0e6ff', lineHeight: 1.6 }}>{getMensagem(posicao)}</div>
+        </div>
+        <div className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>📎 Materiais informativos</h3>
+          <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
+            Arquivos liberados pela administração para consulta.
+          </p>
+
+          {erroMateriais && (
+            <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.16)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#facc15', marginBottom: 14 }}>
+              {erroMateriais}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gap: 12 }}>
+            {materiais.map(material => (
+              <div key={material.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 220 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
+                  {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
+                  <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
+                </div>
+                <button type="button" onClick={() => handleAbrirMaterial(material)} style={{ background: 'linear-gradient(135deg,#be185d,#7c3aed)', border: 0, color: 'white', borderRadius: 10, padding: '10px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  Abrir arquivo
+                </button>
+              </div>
+            ))}
+            {materiais.length === 0 && !erroMateriais && (
+              <div style={{ textAlign: 'center', color: 'rgba(240,230,255,0.35)', fontSize: 14, padding: '22px 10px' }}>
+                Nenhum material informativo disponível no momento.
+              </div>
+            )}
+          </div>
         </div>
         <AlterarSenhaCard />
       </main>

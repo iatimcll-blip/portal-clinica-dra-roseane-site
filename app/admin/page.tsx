@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Profile, ConfiguracoesMes, Resultado } from '@/lib/types'
+import type { Profile, ConfiguracoesMes, MaterialInformativo, Resultado } from '@/lib/types'
 import {
   MESES_LISTA, formatBRL, getStatusClass, getProgressColor,
   getMedalEmoji, calcPctMeta, mesNumero,
@@ -16,7 +16,9 @@ import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDem
 import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
 
-type Aba = 'mensal' | 'anual' | 'bonus'
+type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
+
+const BUCKET_MATERIAIS = 'materiais-informativos'
 
 export default function AdminPage() {
   const router = useRouter()
@@ -26,6 +28,13 @@ export default function AdminPage() {
   const [config, setConfig] = useState<ConfiguracoesMes | null>(null)
   const [resultados, setResultados] = useState<Resultado[]>([])
   const [todosResultados, setTodosResultados] = useState<Resultado[]>([])
+  const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
+  const [tituloMaterial, setTituloMaterial] = useState('')
+  const [descricaoMaterial, setDescricaoMaterial] = useState('')
+  const [arquivoMaterial, setArquivoMaterial] = useState<File | null>(null)
+  const [salvandoMaterial, setSalvandoMaterial] = useState(false)
+  const [mensagemMaterial, setMensagemMaterial] = useState('')
+  const [erroMaterial, setErroMaterial] = useState('')
   const [loading, setLoading] = useState(true)
 
   const mesNum = mesNumero(mesSelecionado)
@@ -38,6 +47,7 @@ export default function AdminPage() {
       setConfig(getDemoConfig(mesNum))
       setResultados(getDemoResultadosMes(mesNum))
       setTodosResultados(getDemoResultadosAnual(12))
+      setMateriais([])
       setLoading(false)
       return
     }
@@ -61,17 +71,19 @@ export default function AdminPage() {
       return
     }
 
-    const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }] = await Promise.all([
+    const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }, { data: mats }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', 2025).single(),
       supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', 2025),
       supabase.from('resultados').select('*').eq('ano', 2025),
+      supabase.from('materiais_informativos').select('*').order('created_at', { ascending: false }),
     ])
 
     setProfiles(profs ?? [])
     setConfig(cfg ?? null)
     setResultados(res ?? [])
     setTodosResultados(anuais ?? [])
+    setMateriais(mats ?? [])
     setLoading(false)
   }, [mesNum, router])
 
@@ -86,6 +98,101 @@ export default function AdminPage() {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  function formatFileSize(bytes?: number | null) {
+    if (!bytes) return 'Tamanho não informado'
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  }
+
+  async function handleUploadMaterial(e: React.SyntheticEvent) {
+    e.preventDefault()
+    setMensagemMaterial('')
+    setErroMaterial('')
+
+    if (DEMO_MODE) {
+      setErroMaterial('Upload real indisponível no modo demonstração.')
+      return
+    }
+
+    if (!arquivoMaterial) {
+      setErroMaterial('Selecione um arquivo para anexar.')
+      return
+    }
+
+    setSalvandoMaterial(true)
+    const supabase = createClient()
+    const titulo = tituloMaterial.trim() || arquivoMaterial.name
+    const nomeSeguro = arquivoMaterial.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]/g, '-')
+    const filePath = `${Date.now()}-${crypto.randomUUID()}-${nomeSeguro}`
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_MATERIAIS)
+      .upload(filePath, arquivoMaterial, {
+        contentType: arquivoMaterial.type || 'application/octet-stream',
+        upsert: false,
+      })
+
+    if (uploadError) {
+      setErroMaterial('Não foi possível enviar o arquivo. Verifique se o bucket e as políticas foram criados no Supabase.')
+      setSalvandoMaterial(false)
+      return
+    }
+
+    const { error: insertError } = await supabase.from('materiais_informativos').insert({
+      titulo,
+      descricao: descricaoMaterial.trim() || null,
+      file_name: arquivoMaterial.name,
+      file_path: filePath,
+      file_type: arquivoMaterial.type || null,
+      file_size: arquivoMaterial.size,
+      ativo: true,
+    })
+
+    if (insertError) {
+      await supabase.storage.from(BUCKET_MATERIAIS).remove([filePath])
+      setErroMaterial('Arquivo enviado, mas não foi possível salvar o registro informativo.')
+      setSalvandoMaterial(false)
+      return
+    }
+
+    setTituloMaterial('')
+    setDescricaoMaterial('')
+    setArquivoMaterial(null)
+    setMensagemMaterial('Material anexado e liberado para as profissionais.')
+    setSalvandoMaterial(false)
+    await carregarDados()
+  }
+
+  async function handleRemoverMaterial(material: MaterialInformativo) {
+    if (!confirm(`Remover o material "${material.titulo}"?`)) return
+
+    const supabase = createClient()
+    const { error: registroError } = await supabase.from('materiais_informativos').delete().eq('id', material.id)
+    if (registroError) {
+      setErroMaterial('Não foi possível remover o material.')
+      return
+    }
+
+    await supabase.storage.from(BUCKET_MATERIAIS).remove([material.file_path])
+    setMensagemMaterial('Material removido.')
+    await carregarDados()
+  }
+
+  async function handleAbrirMaterial(material: MaterialInformativo) {
+    const supabase = createClient()
+    const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(material.file_path, 60 * 10)
+
+    if (error || !data?.signedUrl) {
+      setErroMaterial('Não foi possível abrir o arquivo agora.')
+      return
+    }
+
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
   const cfg = config ?? { meta_clinica: 55000, meta_gatilho: 15000, meta_max: 18000, meta_individual_anual: 187000 }
@@ -183,7 +290,7 @@ export default function AdminPage() {
 
             {/* Tabs */}
             <div className="tabs-scroll" style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-              {([['mensal','📅 Ranking Mensal'],['anual','🏆 Ranking Anual'],['bonus','💰 Bônus e Comissões']] as const).map(([t, label]) => (
+              {([['mensal','📅 Ranking Mensal'],['anual','🏆 Ranking Anual'],['bonus','💰 Bônus e Comissões'],['materiais','📎 Materiais']] as const).map(([t, label]) => (
                 <button key={t} onClick={() => setAba(t)} style={{
                   padding: '8px 18px', borderRadius: 10, border: 'none', cursor: 'pointer',
                   background: aba === t ? 'linear-gradient(135deg,#be185d,#7c3aed)' : 'rgba(255,255,255,0.05)',
@@ -320,6 +427,93 @@ export default function AdminPage() {
                   ))}
                 </div>
               </>
+            )}
+
+            {aba === 'materiais' && (
+              <div className="glass-sm" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
+                <div style={{ padding: '18px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 600 }}>📎 Materiais informativos</h2>
+                  <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.4)', marginTop: 4 }}>
+                    Anexe arquivos para consulta das profissionais no painel individual.
+                  </p>
+                </div>
+
+                <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <form onSubmit={handleUploadMaterial} className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.4fr 1.3fr auto', gap: 12, alignItems: 'end' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Título</label>
+                      <input className="input-field" value={tituloMaterial} onChange={e => setTituloMaterial(e.target.value)} placeholder="Ex.: Protocolo de atendimento" />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Resumo</label>
+                      <input className="input-field" value={descricaoMaterial} onChange={e => setDescricaoMaterial(e.target.value)} placeholder="Descrição breve para as profissionais" />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Arquivo</label>
+                      <input
+                        type="file"
+                        className="input-field"
+                        onChange={e => setArquivoMaterial(e.target.files?.[0] ?? null)}
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.txt,.csv,.mp4,.mov,.zip"
+                      />
+                    </div>
+                    <button type="submit" className="btn-primary" disabled={salvandoMaterial} style={{ minWidth: 150 }}>
+                      {salvandoMaterial ? 'Enviando...' : 'Anexar'}
+                    </button>
+                  </form>
+
+                  {erroMaterial && (
+                    <div style={{ marginTop: 14, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#f87171' }}>
+                      {erroMaterial}
+                    </div>
+                  )}
+                  {mensagemMaterial && (
+                    <div style={{ marginTop: 14, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#86efac' }}>
+                      {mensagemMaterial}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        {['Material','Arquivo','Tamanho','Status','Ações'].map(h => (
+                          <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {materiais.map(material => (
+                        <tr key={material.id} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td style={{ padding: 16, minWidth: 260 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
+                            {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
+                          </td>
+                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{material.file_name}</td>
+                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.5)', whiteSpace: 'nowrap' }}>{formatFileSize(material.file_size)}</td>
+                          <td style={{ padding: 16 }}><span className={material.ativo ? 'badge-acima' : 'badge-abaixo'}>{material.ativo ? 'Visível' : 'Oculto'}</span></td>
+                          <td style={{ padding: 16, whiteSpace: 'nowrap' }}>
+                            <button type="button" onClick={() => handleAbrirMaterial(material)} style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.24)', color: '#7dd3fc', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8 }}>
+                              Abrir
+                            </button>
+                            <button type="button" onClick={() => handleRemoverMaterial(material)} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)', color: '#f87171', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                              Excluir
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {materiais.length === 0 && (
+                        <tr>
+                          <td colSpan={5} style={{ padding: 40, textAlign: 'center', color: 'rgba(240,230,255,0.35)', fontSize: 14 }}>
+                            Nenhum material anexado ainda.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
 
             <AlterarSenhaCard />
