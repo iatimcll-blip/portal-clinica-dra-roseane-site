@@ -44,6 +44,7 @@ export default function PainelProfissional() {
   const [totalClinicaMes, setTotalClinicaMes] = useState(0)
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
   const [erroMateriais, setErroMateriais] = useState('')
+  const [visualizadorPdf, setVisualizadorPdf] = useState<{ titulo: string; url: string } | null>(null)
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string) => {
@@ -147,12 +148,21 @@ export default function PainelProfissional() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`
   }
 
+  function isPdfMaterial(material: MaterialInformativo) {
+    return material.file_type === 'application/pdf' || material.file_name.toLowerCase().endsWith('.pdf')
+  }
+
   async function handleAbrirMaterial(material: MaterialInformativo) {
     const supabase = createClient()
     const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(material.file_path, 60 * 10)
 
     if (error || !data?.signedUrl) {
       setErroMateriais('Não foi possível abrir este material agora.')
+      return
+    }
+
+    if (isPdfMaterial(material)) {
+      setVisualizadorPdf({ titulo: material.titulo, url: `${data.signedUrl}#toolbar=1&navpanes=0&view=FitH` })
       return
     }
 
@@ -382,6 +392,62 @@ export default function PainelProfissional() {
         </div>
         <AlterarSenhaCard />
       </main>
+
+      {visualizadorPdf && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Visualização de ${visualizadorPdf.titulo}`}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            background: 'rgba(5,0,12,0.86)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              width: 'min(1100px, 100%)',
+              height: 'min(860px, 92vh)',
+              background: '#12071d',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 16,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 24px 80px rgba(0,0,0,0.45)',
+            }}
+          >
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {visualizadorPdf.titulo}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginTop: 2 }}>
+                  Use a barra de rolagem para passar página por página.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVisualizadorPdf(null)}
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#f0e6ff', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+              >
+                Fechar
+              </button>
+            </div>
+            <iframe
+              src={visualizadorPdf.url}
+              title={visualizadorPdf.titulo}
+              style={{ width: '100%', height: '100%', border: 0, background: '#1f1f1f' }}
+            />
+          </div>
+        </div>
+      )}
 
       <DecoracaoDireita />
     </div>
