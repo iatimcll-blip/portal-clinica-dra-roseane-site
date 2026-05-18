@@ -15,6 +15,7 @@
 -- | Perfil                            | Email              | Senha        |
 -- |-----------------------------------|--------------------|--------------|
 -- | Admin                             | admin@clinica.com  | Admin@2025!  |
+-- | Gestao                            | gestao@clinica.com | Gestao@2025! |
 -- | Erica Peres Ciriaco               | erica@clinica.com  | Erica@2025!  |
 -- | Gilmara Sousa Cavalcante          | gilmara@clinica.com| Gilmara@2025!|
 -- | Kelly Lavinya Silva Nascimento Sousa | kelly@clinica.com | Kelly@2025! |

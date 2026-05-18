@@ -24,6 +24,13 @@ const acessos = [
     role: 'admin',
   },
   {
+    nome: 'Gestao',
+    primeiro_nome: 'Gestao',
+    email: 'gestao@clinica.com',
+    senha: 'Gestao@2025!',
+    role: 'admin',
+  },
+  {
     nome: 'Erica Peres Ciriaco',
     primeiro_nome: 'Erica',
     email: 'erica@clinica.com',
