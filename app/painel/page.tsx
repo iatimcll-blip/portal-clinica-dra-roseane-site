@@ -27,14 +27,18 @@ const FOTOS_PROFISSIONAIS: Record<string, string> = {
 }
 
 const FRASES_MOTIVACIONAIS = [
-  'Cada atendimento bem feito constrói a confiança que faz a clínica crescer.',
-  'Sua dedicação de hoje aproxima você da meta e fortalece toda a equipe.',
-  'Resultados consistentes nascem de pequenos avanços feitos com excelência.',
-  'Seu cuidado transforma a experiência de cada cliente e valoriza seu trabalho.',
-  'Continue firme: foco, presença e qualidade fazem a diferença no resultado do mês.',
-  'Metas são conquistadas um atendimento, uma venda e uma atitude de cada vez.',
-  'Quando você cuida dos detalhes, o resultado aparece no painel e no reconhecimento.',
-  'Seu desempenho é parte essencial do crescimento da clínica.',
+  'O cuidado que você entrega hoje deixa marcas positivas muito além do atendimento.',
+  'Cada cliente atendida com presença é uma oportunidade de transformar confiança em resultado.',
+  'A excelência aparece nos detalhes que você escolhe repetir todos os dias.',
+  'Quando você reconhece seu próprio progresso, fica mais forte para conquistar o próximo passo.',
+  'Metas importantes são construídas com constância, atenção e carinho pelo que se faz.',
+  'Seu trabalho tem valor porque une técnica, sensibilidade e compromisso com cada pessoa.',
+  'Crescer também é perceber o quanto suas pequenas evoluções já mudaram o caminho.',
+  'A dedicação silenciosa de hoje prepara os resultados que serão celebrados amanhã.',
+  'Você não precisa fazer tudo de uma vez; precisa seguir fazendo o melhor com presença.',
+  'Cada escolha feita com cuidado fortalece sua jornada profissional e inspira a equipe.',
+  'O resultado nasce quando propósito, disciplina e acolhimento caminham juntos.',
+  'Confie no processo: a evolução aparece quando você mantém o foco mesmo nos dias comuns.',
 ]
 
 type DashboardProfissional = {
