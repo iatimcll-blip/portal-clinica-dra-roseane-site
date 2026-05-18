@@ -26,6 +26,17 @@ const FOTOS_PROFISSIONAIS: Record<string, string> = {
   tayane: '/Tayane.png',
 }
 
+const FRASES_MOTIVACIONAIS = [
+  'Cada atendimento bem feito constrói a confiança que faz a clínica crescer.',
+  'Sua dedicação de hoje aproxima você da meta e fortalece toda a equipe.',
+  'Resultados consistentes nascem de pequenos avanços feitos com excelência.',
+  'Seu cuidado transforma a experiência de cada cliente e valoriza seu trabalho.',
+  'Continue firme: foco, presença e qualidade fazem a diferença no resultado do mês.',
+  'Metas são conquistadas um atendimento, uma venda e uma atitude de cada vez.',
+  'Quando você cuida dos detalhes, o resultado aparece no painel e no reconhecimento.',
+  'Seu desempenho é parte essencial do crescimento da clínica.',
+]
+
 type DashboardProfissional = {
   realizado: number
   comissao_avaliacoes: number
@@ -57,6 +68,7 @@ export default function PainelProfissional() {
   const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; baseUrl: string; pagina: number } | null>(null)
   const [totalPaginasPdf, setTotalPaginasPdf] = useState(0)
   const [carregandoPdf, setCarregandoPdf] = useState(false)
+  const [fraseMotivacional, setFraseMotivacional] = useState('')
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string) => {
@@ -183,6 +195,11 @@ export default function PainelProfissional() {
       carregar(mesSelecionado, profileId).then(() => setLoading(false))
     })
   }, [mesSelecionado, profileId, carregar])
+
+  useEffect(() => {
+    const indice = Math.floor(Math.random() * FRASES_MOTIVACIONAIS.length)
+    queueMicrotask(() => setFraseMotivacional(FRASES_MOTIVACIONAIS[indice]))
+  }, [])
 
   useEffect(() => {
     const primeiroPdf = materiais.find(isPdfMaterial)
@@ -514,7 +531,7 @@ export default function PainelProfissional() {
         }}>
           <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)', marginBottom: 8 }}>💬 Mensagem do mês</div>
           <div style={{ fontSize: 15, color: '#f0e6ff', lineHeight: 1.6 }}>
-            {rankingDisponivel ? getMensagem(posicao) : 'Seus valores e metas já estão atualizados. A posição do ranking depende da função de ranking no Supabase.'}
+            {fraseMotivacional || getMensagem(posicao)}
           </div>
         </div>
         <div id="painel-materiais" className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
