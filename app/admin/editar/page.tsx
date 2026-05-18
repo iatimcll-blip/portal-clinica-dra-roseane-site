@@ -86,8 +86,8 @@ export default function EditarPage() {
       .eq('id', user.id)
       .single()
 
-    if (currentProfile?.role !== 'admin') {
-      router.push('/painel')
+    if (currentProfile?.role !== 'admin' || user.email?.toLowerCase() === 'gestao@clinica.com') {
+      router.push(currentProfile?.role === 'admin' ? '/admin' : '/painel')
       return
     }
 

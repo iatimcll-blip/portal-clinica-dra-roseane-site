@@ -81,7 +81,7 @@ export default function AdminPage() {
       router.push('/painel')
       return
     }
-    setPerfilAdmin(currentProfile.role)
+    setPerfilAdmin(user.email?.toLowerCase() === 'gestao@clinica.com' ? 'gestao' : currentProfile.role)
 
     const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }, { data: mats, error: matsError }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
