@@ -18,6 +18,8 @@ import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDem
 
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
+const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
+const YOUTUBE_UPLOADS_EMBED_URL = 'https://www.youtube-nocookie.com/embed/videoseries?list=UUomJ8VZUli9JIv2Cgpzf_DQ'
 const FOTOS_PROFISSIONAIS: Record<string, string> = {
   erica: '/erica.png',
   gilmara: '/Gilmara.png',
@@ -528,16 +530,39 @@ export default function PainelProfissional() {
           </div>
         </div>
 
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(190,24,93,0.08))',
-          border: '1px solid rgba(192,132,252,0.15)',
-          borderRadius: 16, padding: 24,
-        }}>
-          <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)', marginBottom: 8 }}>💬 Mensagem do mês</div>
-          <div style={{ fontSize: 15, color: '#f0e6ff', lineHeight: 1.6 }}>
-            {fraseMotivacional || getMensagem(posicao)}
+        <div className="professional-content-row">
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(190,24,93,0.08))',
+            border: '1px solid rgba(192,132,252,0.15)',
+            borderRadius: 16, padding: 24,
+          }}>
+            <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)', marginBottom: 8 }}>💬 Mensagem do mês</div>
+            <div style={{ fontSize: 15, color: '#f0e6ff', lineHeight: 1.6 }}>
+              {fraseMotivacional || getMensagem(posicao)}
+            </div>
+          </div>
+
+          <div className="youtube-window">
+            <div className="youtube-window-header">
+              <div>
+                <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)', marginBottom: 4 }}>▶ Conteúdos da Dra. Roseane</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#f0e6ff' }}>Vídeos para assistir no painel</div>
+              </div>
+              <a href={YOUTUBE_CANAL_URL} target="_blank" rel="noreferrer" className="youtube-channel-link">
+                Canal
+              </a>
+            </div>
+            <div className="youtube-frame-shell">
+              <iframe
+                src={YOUTUBE_UPLOADS_EMBED_URL}
+                title="Vídeos do canal Dra. Roseane Débora"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
           </div>
         </div>
+
         <div id="painel-materiais" className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>📎 Materiais informativos</h3>
           <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
