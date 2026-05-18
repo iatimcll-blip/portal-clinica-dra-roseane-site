@@ -19,8 +19,7 @@ import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDem
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
-const YOUTUBE_UPLOADS_PLAYLIST = 'UUomJ8VZUli9JIv2Cgpzf_DQ'
-const YOUTUBE_TOTAL_ROTACAO = 12
+const YOUTUBE_VIDEO_IDS = ['gK8WPJ6WsOQ', '6fptiuW0ck0', 'lswlKf-q_bU', 'Zj1PE4m9wPQ']
 const FOTOS_PROFISSIONAIS: Record<string, string> = {
   erica: '/erica.png',
   gilmara: '/Gilmara.png',
@@ -206,7 +205,7 @@ export default function PainelProfissional() {
 
   useEffect(() => {
     const indice = Math.floor(Math.random() * FRASES_MOTIVACIONAIS.length)
-    const indiceVideo = Math.floor(Math.random() * YOUTUBE_TOTAL_ROTACAO)
+    const indiceVideo = Math.floor(Math.random() * YOUTUBE_VIDEO_IDS.length)
     queueMicrotask(() => {
       setFraseMotivacional(FRASES_MOTIVACIONAIS[indice])
       setYoutubeVideoIndex(indiceVideo)
@@ -307,7 +306,7 @@ export default function PainelProfissional() {
   }
 
   function trocarVideoYoutube(delta: number) {
-    setYoutubeVideoIndex(atual => (atual + delta + YOUTUBE_TOTAL_ROTACAO) % YOUTUBE_TOTAL_ROTACAO)
+    setYoutubeVideoIndex(atual => (atual + delta + YOUTUBE_VIDEO_IDS.length) % YOUTUBE_VIDEO_IDS.length)
   }
 
   const metaGatilho = config?.meta_gatilho ?? 0
@@ -325,7 +324,8 @@ export default function PainelProfissional() {
     acc[categoria] = [...(acc[categoria] ?? []), material]
     return acc
   }, {})
-  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${YOUTUBE_UPLOADS_PLAYLIST}&index=${youtubeVideoIndex}&autoplay=1&mute=1&playsinline=1`
+  const youtubeVideoId = YOUTUBE_VIDEO_IDS[youtubeVideoIndex] ?? YOUTUBE_VIDEO_IDS[0]
+  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&mute=1&playsinline=1&rel=0`
 
   if (loading || !profile) {
     return (
@@ -565,12 +565,12 @@ export default function PainelProfissional() {
             </div>
             <div className="youtube-controls">
               <button type="button" onClick={() => trocarVideoYoutube(-1)}>Anterior</button>
-              <span>Vídeo {youtubeVideoIndex + 1}</span>
+              <span>Vídeo {youtubeVideoIndex + 1} de {YOUTUBE_VIDEO_IDS.length}</span>
               <button type="button" onClick={() => trocarVideoYoutube(1)}>Próximo</button>
             </div>
             <div className="youtube-frame-shell">
               <iframe
-                key={youtubeVideoIndex}
+                key={youtubeVideoId}
                 src={youtubeEmbedUrl}
                 title="Vídeos do canal Dra. Roseane Débora"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
