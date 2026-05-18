@@ -19,7 +19,8 @@ import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDem
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
-const YOUTUBE_UPLOADS_EMBED_URL = 'https://www.youtube-nocookie.com/embed/videoseries?list=UUomJ8VZUli9JIv2Cgpzf_DQ&autoplay=1&mute=1&playsinline=1'
+const YOUTUBE_UPLOADS_PLAYLIST = 'UUomJ8VZUli9JIv2Cgpzf_DQ'
+const YOUTUBE_TOTAL_ROTACAO = 12
 const FOTOS_PROFISSIONAIS: Record<string, string> = {
   erica: '/erica.png',
   gilmara: '/Gilmara.png',
@@ -75,6 +76,7 @@ export default function PainelProfissional() {
   const [totalPaginasPdf, setTotalPaginasPdf] = useState(0)
   const [carregandoPdf, setCarregandoPdf] = useState(false)
   const [fraseMotivacional, setFraseMotivacional] = useState('')
+  const [youtubeVideoIndex, setYoutubeVideoIndex] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string) => {
@@ -204,7 +206,11 @@ export default function PainelProfissional() {
 
   useEffect(() => {
     const indice = Math.floor(Math.random() * FRASES_MOTIVACIONAIS.length)
-    queueMicrotask(() => setFraseMotivacional(FRASES_MOTIVACIONAIS[indice]))
+    const indiceVideo = Math.floor(Math.random() * YOUTUBE_TOTAL_ROTACAO)
+    queueMicrotask(() => {
+      setFraseMotivacional(FRASES_MOTIVACIONAIS[indice])
+      setYoutubeVideoIndex(indiceVideo)
+    })
   }, [])
 
   useEffect(() => {
@@ -300,6 +306,10 @@ export default function PainelProfissional() {
     return material.categoria || 'Comunicados'
   }
 
+  function trocarVideoYoutube(delta: number) {
+    setYoutubeVideoIndex(atual => (atual + delta + YOUTUBE_TOTAL_ROTACAO) % YOUTUBE_TOTAL_ROTACAO)
+  }
+
   const metaGatilho = config?.meta_gatilho ?? 0
   const metaMax = config?.meta_max ?? 0
   const metaAnual = config?.meta_individual_anual ?? 120000
@@ -315,6 +325,7 @@ export default function PainelProfissional() {
     acc[categoria] = [...(acc[categoria] ?? []), material]
     return acc
   }, {})
+  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${YOUTUBE_UPLOADS_PLAYLIST}&index=${youtubeVideoIndex}&autoplay=1&mute=1&playsinline=1`
 
   if (loading || !profile) {
     return (
@@ -552,9 +563,15 @@ export default function PainelProfissional() {
                 Canal
               </a>
             </div>
+            <div className="youtube-controls">
+              <button type="button" onClick={() => trocarVideoYoutube(-1)}>Anterior</button>
+              <span>Vídeo {youtubeVideoIndex + 1}</span>
+              <button type="button" onClick={() => trocarVideoYoutube(1)}>Próximo</button>
+            </div>
             <div className="youtube-frame-shell">
               <iframe
-                src={YOUTUBE_UPLOADS_EMBED_URL}
+                key={youtubeVideoIndex}
+                src={youtubeEmbedUrl}
                 title="Vídeos do canal Dra. Roseane Débora"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
