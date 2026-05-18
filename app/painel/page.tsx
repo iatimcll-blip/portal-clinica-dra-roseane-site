@@ -19,7 +19,7 @@ import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDem
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
-const YOUTUBE_UPLOADS_EMBED_URL = 'https://www.youtube-nocookie.com/embed/videoseries?list=UUomJ8VZUli9JIv2Cgpzf_DQ'
+const YOUTUBE_UPLOADS_EMBED_URL = 'https://www.youtube-nocookie.com/embed/videoseries?list=UUomJ8VZUli9JIv2Cgpzf_DQ&autoplay=1&mute=1&playsinline=1'
 const FOTOS_PROFISSIONAIS: Record<string, string> = {
   erica: '/erica.png',
   gilmara: '/Gilmara.png',
