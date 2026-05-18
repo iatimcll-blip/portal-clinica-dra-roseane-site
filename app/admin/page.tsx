@@ -17,6 +17,7 @@ import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
 
 type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
+type PerfilAdmin = 'admin' | 'gestao'
 
 const BUCKET_MATERIAIS = 'materiais-informativos'
 const LIMITE_MATERIAL_BYTES = 50 * 1024 * 1024
@@ -41,6 +42,7 @@ export default function AdminPage() {
   const [salvandoMaterial, setSalvandoMaterial] = useState(false)
   const [mensagemMaterial, setMensagemMaterial] = useState('')
   const [erroMaterial, setErroMaterial] = useState('')
+  const [perfilAdmin, setPerfilAdmin] = useState<PerfilAdmin>('admin')
   const [loading, setLoading] = useState(true)
 
   const mesNum = mesNumero(mesSelecionado)
@@ -56,6 +58,7 @@ export default function AdminPage() {
       setMateriais([])
       setLeiturasMateriais([])
       setEventosAuditoria([])
+      setPerfilAdmin('admin')
       setLoading(false)
       return
     }
@@ -74,10 +77,11 @@ export default function AdminPage() {
       .eq('id', user.id)
       .single()
 
-    if (currentProfile?.role !== 'admin') {
+    if (currentProfile?.role !== 'admin' && currentProfile?.role !== 'gestao') {
       router.push('/painel')
       return
     }
+    setPerfilAdmin(currentProfile.role)
 
     const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }, { data: mats, error: matsError }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
@@ -273,6 +277,7 @@ export default function AdminPage() {
   const pertoDaMeta = rankingMensal.filter(p => p.pctMeta >= 80 && p.pctMeta < 100).length
   const totalLeituras = leiturasMateriais.length
   const totalLeiturasPossiveis = materiais.length * profiles.length
+  const podeEditar = perfilAdmin === 'admin'
 
   function categoriaDoMaterial(material: MaterialInformativo) {
     return material.categoria || 'Comunicados'
@@ -291,7 +296,9 @@ export default function AdminPage() {
           <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)', marginTop: 4 }}>Painel Administrativo</div>
         </div>
         <div className="nav-link active">📊 Dashboard</div>
-        <Link href="/admin/editar" style={{ textDecoration: 'none' }}><div className="nav-link">✏️ Editar Metas</div></Link>
+        {podeEditar && (
+          <Link href="/admin/editar" style={{ textDecoration: 'none' }}><div className="nav-link">✏️ Editar Metas</div></Link>
+        )}
         <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
           <button onClick={handleSair} style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}>
             <div className="nav-link">🚪 Sair</div>
@@ -311,7 +318,9 @@ export default function AdminPage() {
             <select value={mesSelecionado} onChange={e => setMesSelecionado(e.target.value)} className="input-field" style={{ width: 'auto' }}>
               {MESES_LISTA.map(m => <option key={m} value={m} style={{ background: '#1a0a2e' }}>{m}</option>)}
             </select>
-            <div style={{ background: 'rgba(244,114,182,0.1)', border: '1px solid rgba(244,114,182,0.2)', borderRadius: 10, padding: '8px 14px', fontSize: 13, color: '#f472b6' }}>👤 Admin</div>
+            <div style={{ background: 'rgba(244,114,182,0.1)', border: '1px solid rgba(244,114,182,0.2)', borderRadius: 10, padding: '8px 14px', fontSize: 13, color: '#f472b6' }}>
+              👤 {podeEditar ? 'Admin' : 'Gestão'}
+            </div>
           </div>
         </div>
 
@@ -534,8 +543,9 @@ export default function AdminPage() {
                   </p>
                 </div>
 
-                <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <form onSubmit={handleUploadMaterial} className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.2fr 0.9fr 1.2fr auto', gap: 12, alignItems: 'end' }}>
+                {podeEditar ? (
+                  <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <form onSubmit={handleUploadMaterial} className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.2fr 0.9fr 1.2fr auto', gap: 12, alignItems: 'end' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Título</label>
                       <input className="input-field" value={tituloMaterial} onChange={e => setTituloMaterial(e.target.value)} placeholder="Ex.: Protocolo de atendimento" />
@@ -564,19 +574,24 @@ export default function AdminPage() {
                     <button type="submit" className="btn-primary" disabled={salvandoMaterial} style={{ minWidth: 150 }}>
                       {salvandoMaterial ? 'Enviando...' : 'Anexar'}
                     </button>
-                  </form>
+                    </form>
 
-                  {erroMaterial && (
-                    <div style={{ marginTop: 14, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#f87171' }}>
-                      {erroMaterial}
-                    </div>
-                  )}
-                  {mensagemMaterial && (
-                    <div style={{ marginTop: 14, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#86efac' }}>
-                      {mensagemMaterial}
-                    </div>
-                  )}
-                </div>
+                    {erroMaterial && (
+                      <div style={{ marginTop: 14, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#f87171' }}>
+                        {erroMaterial}
+                      </div>
+                    )}
+                    {mensagemMaterial && (
+                      <div style={{ marginTop: 14, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#86efac' }}>
+                        {mensagemMaterial}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 13, color: 'rgba(240,230,255,0.55)' }}>
+                    Perfil Gestão: visualização liberada sem permissão para anexar, editar ou excluir materiais.
+                  </div>
+                )}
 
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -603,9 +618,11 @@ export default function AdminPage() {
                             <button type="button" onClick={() => handleAbrirMaterial(material)} style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.24)', color: '#7dd3fc', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8 }}>
                               Abrir
                             </button>
-                            <button type="button" onClick={() => handleRemoverMaterial(material)} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)', color: '#f87171', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                              Excluir
-                            </button>
+                            {podeEditar && (
+                              <button type="button" onClick={() => handleRemoverMaterial(material)} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)', color: '#f87171', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                                Excluir
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -55,7 +55,7 @@ export default function LoginPage() {
       .eq('id', user!.id)
       .single()
 
-    router.push(profile?.role === 'admin' ? '/admin' : '/painel')
+    router.push(profile?.role === 'admin' || profile?.role === 'gestao' ? '/admin' : '/painel')
     router.refresh()
   }
 

@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'user'
+export type Role = 'admin' | 'gestao' | 'user'
 
 export type Profile = {
   id: string

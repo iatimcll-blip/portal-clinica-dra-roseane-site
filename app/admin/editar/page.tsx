@@ -12,7 +12,7 @@ import {
   MESES_LISTA, mesNumero, formatBRL, calcBonus, calcStatus, calcPctMeta,
   calcComissaoAvaliacoes, getStatusClass,
 } from '@/lib/formulas'
-import type { Profile, ConfiguracoesMes } from '@/lib/types'
+import type { Profile, ConfiguracoesMes, Role } from '@/lib/types'
 import {
   DEMO_MODE,
   adicionarDemoProfissional,
@@ -45,6 +45,7 @@ export default function EditarPage() {
   const [novoNome, setNovoNome] = useState('')
   const [novoPrimeiroNome, setNovoPrimeiroNome] = useState('')
   const [novoAuthId, setNovoAuthId] = useState('')
+  const [novoRole, setNovoRole] = useState<Role>('user')
   const [adicionando, setAdicionando] = useState(false)
   const [mensagemAdicionar, setMensagemAdicionar] = useState('')
   const [editandoProfileId, setEditandoProfileId] = useState<string | null>(null)
@@ -165,7 +166,7 @@ export default function EditarPage() {
     const primeiroNome = (novoPrimeiroNome.trim() || nome.split(' ')[0] || '').replace(/\s+/g, ' ')
 
     if (nome.length < 3 || primeiroNome.length < 2) {
-      setErroSalvar('Informe o nome completo e o primeiro nome da profissional.')
+      setErroSalvar('Informe o nome completo e o primeiro nome do acesso.')
       return
     }
 
@@ -176,6 +177,7 @@ export default function EditarPage() {
         adicionarDemoProfissional(nome, primeiroNome)
         setNovoNome('')
         setNovoPrimeiroNome('')
+        setNovoRole('user')
         setMensagemAdicionar('Profissional adicionada com metas e resultados zerados para todos os meses.')
         await carregar(mesSelecionado)
         return
@@ -191,30 +193,36 @@ export default function EditarPage() {
 
       const supabase = createClient()
       const { error: profileError } = await supabase.from('profiles').upsert(
-        { id, nome, primeiro_nome: primeiroNome, role: 'user', ativo: true },
+        { id, nome, primeiro_nome: primeiroNome, role: novoRole, ativo: true },
         { onConflict: 'id' }
       )
 
       if (profileError) throw profileError
 
-      const { error: resultadosError } = await supabase.from('resultados').upsert(
-        Array.from({ length: 12 }, (_, index) => ({
-          profile_id: id,
-          mes: index + 1,
-          ano: ANO,
-          realizado: 0,
-          comissao_avaliacoes: 0,
-          nota_feedback: 0,
-        })),
-        { onConflict: 'profile_id,mes,ano' }
-      )
+      if (novoRole === 'user') {
+        const { error: resultadosError } = await supabase.from('resultados').upsert(
+          Array.from({ length: 12 }, (_, index) => ({
+            profile_id: id,
+            mes: index + 1,
+            ano: ANO,
+            realizado: 0,
+            comissao_avaliacoes: 0,
+            nota_feedback: 0,
+          })),
+          { onConflict: 'profile_id,mes,ano' }
+        )
 
-      if (resultadosError) throw resultadosError
+        if (resultadosError) throw resultadosError
+      }
 
       setNovoNome('')
       setNovoPrimeiroNome('')
       setNovoAuthId('')
-      setMensagemAdicionar('Profissional adicionada e liberada nas metas, rankings e painel individual.')
+      setNovoRole('user')
+      setMensagemAdicionar(novoRole === 'user'
+        ? 'Profissional adicionada e liberada nas metas, rankings e painel individual.'
+        : 'Acesso Gestão criado com visualização administrativa sem edição.'
+      )
       await carregar(mesSelecionado)
     } catch (error) {
       console.error('Erro ao adicionar profissional', error)
@@ -387,7 +395,7 @@ export default function EditarPage() {
               <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
                 A nova profissional entra ativa, com acesso individual e resultados zerados para seguir as mesmas regras de metas, ranking, bonus e comissoes.
               </p>
-              <div className="responsive-grid edit-config-grid" style={{ display: 'grid', gridTemplateColumns: DEMO_MODE ? '1.5fr 1fr auto' : '1.3fr 0.8fr 1.5fr auto', gap: 12, alignItems: 'end' }}>
+              <div className="responsive-grid edit-config-grid" style={{ display: 'grid', gridTemplateColumns: DEMO_MODE ? '1.5fr 1fr 0.9fr auto' : '1.2fr 0.8fr 0.9fr 1.4fr auto', gap: 12, alignItems: 'end' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
                     Nome completo
@@ -412,6 +420,19 @@ export default function EditarPage() {
                     onChange={e => setNovoPrimeiroNome(e.target.value)}
                     placeholder="Ex.: Ana"
                   />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
+                    Perfil de acesso
+                  </label>
+                  <select
+                    className="input-field"
+                    value={novoRole}
+                    onChange={e => setNovoRole(e.target.value as Role)}
+                  >
+                    <option value="user" style={{ background: '#1a0a2e' }}>Esteticista</option>
+                    <option value="gestao" style={{ background: '#1a0a2e' }}>Gestão</option>
+                  </select>
                 </div>
                 {!DEMO_MODE && (
                   <div>

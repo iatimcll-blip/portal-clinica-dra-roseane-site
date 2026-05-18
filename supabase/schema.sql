@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   id              UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   nome            TEXT NOT NULL,
   primeiro_nome   TEXT NOT NULL,
-  role            TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  role            TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'gestao', 'user')),
   ativo           BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -78,6 +78,19 @@ $$ LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = public;
 
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
+CREATE OR REPLACE FUNCTION public.is_admin_or_gestao()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = auth.uid()
+      AND p.role IN ('admin', 'gestao')
+      AND p.ativo = true
+  );
+$$ LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = public;
+
+GRANT EXECUTE ON FUNCTION public.is_admin_or_gestao() TO authenticated;
+
 -- PROFILES: cada um vê o próprio; admin vê todos
 DROP POLICY IF EXISTS "user_see_own_profile" ON profiles;
 CREATE POLICY "user_see_own_profile"
@@ -86,7 +99,7 @@ CREATE POLICY "user_see_own_profile"
 DROP POLICY IF EXISTS "admin_see_all_profiles" ON profiles;
 CREATE POLICY "admin_see_all_profiles"
   ON profiles FOR SELECT
-  USING (public.is_admin());
+  USING (public.is_admin_or_gestao());
 
 DROP POLICY IF EXISTS "admin_update_profiles" ON profiles;
 CREATE POLICY "admin_update_profiles"
@@ -118,7 +131,7 @@ CREATE POLICY "user_see_own_resultados"
 DROP POLICY IF EXISTS "admin_see_all_resultados" ON resultados;
 CREATE POLICY "admin_see_all_resultados"
   ON resultados FOR SELECT
-  USING (public.is_admin());
+  USING (public.is_admin_or_gestao());
 
 DROP POLICY IF EXISTS "admin_write_resultados" ON resultados;
 CREATE POLICY "admin_write_resultados"
@@ -134,7 +147,7 @@ CREATE POLICY "authenticated_read_active_materials"
 DROP POLICY IF EXISTS "admin_read_all_materials" ON materiais_informativos;
 CREATE POLICY "admin_read_all_materials"
   ON materiais_informativos FOR SELECT TO authenticated
-  USING (public.is_admin());
+  USING (public.is_admin_or_gestao());
 
 DROP POLICY IF EXISTS "admin_insert_materials" ON materiais_informativos;
 CREATE POLICY "admin_insert_materials"
