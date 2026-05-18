@@ -59,10 +59,26 @@ export type MaterialInformativo = {
   id: number
   titulo: string
   descricao: string | null
+  categoria: string | null
   file_name: string
   file_path: string
   file_type: string | null
   file_size: number | null
   ativo: boolean
+  created_at: string
+}
+
+export type MaterialLeitura = {
+  material_id: number
+  profile_id: string
+  read_at: string
+}
+
+export type AuditoriaEvento = {
+  id: number
+  tabela: string
+  registro_id: string | null
+  acao: string
+  detalhes: Record<string, unknown> | null
   created_at: string
 }

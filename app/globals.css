@@ -210,6 +210,56 @@ body {
   text-align: center;
 }
 
+.material-category-title,
+.material-category-badge,
+.material-read-badge {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.material-category-title,
+.material-category-badge {
+  color: #7dd3fc;
+  background: rgba(56,189,248,0.1);
+  border: 1px solid rgba(56,189,248,0.2);
+}
+
+.material-read-badge {
+  color: #86efac;
+  background: rgba(34,197,94,0.12);
+  border: 1px solid rgba(34,197,94,0.22);
+}
+
+.material-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.material-read-button {
+  background: rgba(34,197,94,0.1);
+  border: 1px solid rgba(34,197,94,0.22);
+  color: #86efac;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.material-read-button:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.mobile-bottom-nav {
+  display: none;
+}
+
 .material-canvas-shell {
   width: 100%;
   height: clamp(520px, 78dvh, 760px);
@@ -362,9 +412,41 @@ body {
     padding: 10px;
   }
 
+  .professional-main {
+    scroll-padding-bottom: 90px;
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 8px;
+    border-radius: 16px;
+    background: rgba(13,8,20,0.92);
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 16px 38px rgba(0,0,0,0.42);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-bottom-nav a {
+    color: rgba(240,230,255,0.72);
+    text-decoration: none;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 9px 4px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+  }
+
   .app-main {
     width: 100% !important;
-    padding: 18px 14px 28px !important;
+    padding: 18px 14px 92px !important;
     overflow-x: hidden !important;
   }
 
@@ -526,6 +608,14 @@ body {
   .material-page-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .material-actions {
+    width: 100%;
+  }
+
+  .material-actions button {
+    flex: 1 1 140px;
   }
 
   .material-page-counter {

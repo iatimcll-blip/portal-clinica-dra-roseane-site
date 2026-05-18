@@ -13,7 +13,7 @@ import {
   calcPctGatilho, calcPctMeta, getMensagem, getMensagemAnual,
   getMedalEmoji, getStatusClass,
 } from '@/lib/formulas'
-import type { Profile, ConfiguracoesMes, MaterialInformativo } from '@/lib/types'
+import type { Profile, ConfiguracoesMes, MaterialInformativo, MaterialLeitura } from '@/lib/types'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
 
 const ANO = 2025
@@ -52,6 +52,7 @@ export default function PainelProfissional() {
   const [rankingDisponivel, setRankingDisponivel] = useState(true)
   const [totalClinicaMes, setTotalClinicaMes] = useState(0)
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
+  const [leiturasMateriais, setLeiturasMateriais] = useState<Record<number, string>>({})
   const [erroMateriais, setErroMateriais] = useState('')
   const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; baseUrl: string; pagina: number } | null>(null)
   const [totalPaginasPdf, setTotalPaginasPdf] = useState(0)
@@ -88,16 +89,18 @@ export default function PainelProfissional() {
       setRankingDisponivel(true)
       setTotalClinicaMes(resMes.reduce((s, x) => s + x.realizado, 0))
       setMateriais([])
+      setLeiturasMateriais({})
       return
     }
 
     const supabase = createClient()
     const mesNum = mesNumero(mes)
 
-    const [{ data: cfg }, { data: painelRaw, error: painelError }, { data: materiaisData, error: materiaisError }] = await Promise.all([
+    const [{ data: cfg }, { data: painelRaw, error: painelError }, { data: materiaisData, error: materiaisError }, { data: leiturasData }] = await Promise.all([
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO).single(),
       supabase.rpc('get_professional_dashboard', { p_mes: mesNum, p_ano: ANO }).single(),
       supabase.from('materiais_informativos').select('*').eq('ativo', true).order('created_at', { ascending: false }),
+      supabase.from('materiais_leituras').select('material_id, profile_id, read_at').eq('profile_id', uid),
     ])
 
     let painel = painelRaw as DashboardProfissional | null
@@ -145,6 +148,10 @@ export default function PainelProfissional() {
     setPosicaoAnual(painel?.posicao_anual ?? 1)
     setTotalClinicaMes(painel?.total_clinica ?? 0)
     setMateriais(materiaisData ?? [])
+    setLeiturasMateriais(((leiturasData ?? []) as MaterialLeitura[]).reduce<Record<number, string>>((acc, leitura) => {
+      acc[leitura.material_id] = leitura.read_at
+      return acc
+    }, {}))
     setErroMateriais(materiaisError ? 'Materiais informativos ainda não configurados no Supabase.' : '')
   }, [])
 
@@ -245,6 +252,31 @@ export default function PainelProfissional() {
     })
   }
 
+  async function confirmarLeitura(material: MaterialInformativo) {
+    if (!profileId) return
+    if (DEMO_MODE) {
+      setLeiturasMateriais(prev => ({ ...prev, [material.id]: new Date().toISOString() }))
+      return
+    }
+
+    const supabase = createClient()
+    const agora = new Date().toISOString()
+    const { error } = await supabase
+      .from('materiais_leituras')
+      .upsert({ material_id: material.id, profile_id: profileId, read_at: agora }, { onConflict: 'material_id,profile_id' })
+
+    if (error) {
+      setErroMateriais('Nao foi possivel registrar a confirmacao de leitura. Execute o script de materiais no Supabase.')
+      return
+    }
+
+    setLeiturasMateriais(prev => ({ ...prev, [material.id]: agora }))
+  }
+
+  function categoriaDoMaterial(material: MaterialInformativo) {
+    return material.categoria || 'Comunicados'
+  }
+
   const metaGatilho = config?.meta_gatilho ?? 0
   const metaMax = config?.meta_max ?? 0
   const metaAnual = config?.meta_individual_anual ?? 120000
@@ -255,6 +287,11 @@ export default function PainelProfissional() {
   const pctAnual = metaAnual > 0 ? parseFloat(((acumuladoAnual / metaAnual) * 100).toFixed(1)) : 0
   const faltaMensal = Math.max(0, metaMax - realizado)
   const faltaAnual = Math.max(0, metaAnual - acumuladoAnual)
+  const materiaisAgrupados = materiais.reduce<Record<string, MaterialInformativo[]>>((acc, material) => {
+    const categoria = categoriaDoMaterial(material)
+    acc[categoria] = [...(acc[categoria] ?? []), material]
+    return acc
+  }, {})
 
   if (loading || !profile) {
     return (
@@ -333,8 +370,8 @@ export default function PainelProfissional() {
         </div>
       </aside>
 
-      <main className="app-main" style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <main className="app-main professional-main" style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
+        <div id="painel-resumo" className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
               Olá, <span className="gradient-text">{profile.primeiro_nome}! 👋</span>
@@ -401,7 +438,7 @@ export default function PainelProfissional() {
           ))}
         </div>
 
-        <div className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
+        <div id="painel-metas" className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 20 }}>📊 Progresso Mensal</h3>
 
           <div style={{ marginBottom: 16 }}>
@@ -480,7 +517,7 @@ export default function PainelProfissional() {
             {rankingDisponivel ? getMensagem(posicao) : 'Seus valores e metas já estão atualizados. A posição do ranking depende da função de ranking no Supabase.'}
           </div>
         </div>
-        <div className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
+        <div id="painel-materiais" className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>📎 Materiais informativos</h3>
           <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
             Arquivos liberados pela administração para consulta.
@@ -492,33 +529,54 @@ export default function PainelProfissional() {
             </div>
           )}
 
-          <div style={{ display: 'grid', gap: 12 }}>
-            {materiais.map(material => (
-              <div key={material.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
-                <div style={{ minWidth: 220 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
-                  {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
-                  <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => carregarVisualizacaoPdf(material)}
-                  disabled={!isPdfMaterial(material) || carregandoPdf}
-                  style={{
-                    background: visualizadorPdf?.materialId === material.id ? 'rgba(74,222,128,0.16)' : 'linear-gradient(135deg,#be185d,#7c3aed)',
-                    border: visualizadorPdf?.materialId === material.id ? '1px solid rgba(74,222,128,0.28)' : 0,
-                    color: visualizadorPdf?.materialId === material.id ? '#86efac' : 'white',
-                    borderRadius: 10,
-                    padding: '10px 14px',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: isPdfMaterial(material) ? 'pointer' : 'not-allowed',
-                    opacity: isPdfMaterial(material) ? 1 : 0.55,
-                  }}
-                >
-                  {isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
-                </button>
-              </div>
+          <div style={{ display: 'grid', gap: 18 }}>
+            {Object.entries(materiaisAgrupados).map(([categoria, itens]) => (
+              <section key={categoria} style={{ display: 'grid', gap: 10 }}>
+                <div className="material-category-title">{categoria}</div>
+                {itens.map(material => {
+                  const lidoEm = leiturasMateriais[material.id]
+                  return (
+                    <div key={material.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 220, flex: '1 1 260px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
+                          {lidoEm && <span className="material-read-badge">Ciente</span>}
+                        </div>
+                        {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
+                        <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
+                      </div>
+                      <div className="material-actions">
+                        <button
+                          type="button"
+                          onClick={() => carregarVisualizacaoPdf(material)}
+                          disabled={!isPdfMaterial(material) || carregandoPdf}
+                          style={{
+                            background: visualizadorPdf?.materialId === material.id ? 'rgba(74,222,128,0.16)' : 'linear-gradient(135deg,#be185d,#7c3aed)',
+                            border: visualizadorPdf?.materialId === material.id ? '1px solid rgba(74,222,128,0.28)' : 0,
+                            color: visualizadorPdf?.materialId === material.id ? '#86efac' : 'white',
+                            borderRadius: 10,
+                            padding: '10px 14px',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: isPdfMaterial(material) ? 'pointer' : 'not-allowed',
+                            opacity: isPdfMaterial(material) ? 1 : 0.55,
+                          }}
+                        >
+                          {isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => confirmarLeitura(material)}
+                          disabled={Boolean(lidoEm)}
+                          className="material-read-button"
+                        >
+                          {lidoEm ? `Ciente em ${new Date(lidoEm).toLocaleDateString('pt-BR')}` : 'Li e estou ciente'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </section>
             ))}
             {materiais.length === 0 && !erroMateriais && (
               <div style={{ textAlign: 'center', color: 'rgba(240,230,255,0.35)', fontSize: 14, padding: '22px 10px' }}>
@@ -576,8 +634,17 @@ export default function PainelProfissional() {
             </div>
           )}
         </div>
-        <AlterarSenhaCard />
+        <div id="painel-senha">
+          <AlterarSenhaCard />
+        </div>
       </main>
+
+      <nav className="mobile-bottom-nav" aria-label="Navegacao do painel">
+        <a href="#painel-resumo">Painel</a>
+        <a href="#painel-metas">Metas</a>
+        <a href="#painel-materiais">Materiais</a>
+        <a href="#painel-senha">Senha</a>
+      </nav>
 
       <DecoracaoDireita />
     </div>

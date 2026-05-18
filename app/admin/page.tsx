@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Profile, ConfiguracoesMes, MaterialInformativo, Resultado } from '@/lib/types'
+import type { Profile, ConfiguracoesMes, MaterialInformativo, Resultado, MaterialLeitura, AuditoriaEvento } from '@/lib/types'
 import {
   MESES_LISTA, formatBRL, getStatusClass, getProgressColor,
   getMedalEmoji, calcPctMeta, mesNumero,
@@ -21,6 +21,7 @@ type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
 const BUCKET_MATERIAIS = 'materiais-informativos'
 const LIMITE_MATERIAL_BYTES = 50 * 1024 * 1024
 const EXTENSOES_MATERIAIS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'csv', 'mp4', 'mov', 'zip']
+const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos']
 
 export default function AdminPage() {
   const router = useRouter()
@@ -31,8 +32,11 @@ export default function AdminPage() {
   const [resultados, setResultados] = useState<Resultado[]>([])
   const [todosResultados, setTodosResultados] = useState<Resultado[]>([])
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
+  const [leiturasMateriais, setLeiturasMateriais] = useState<MaterialLeitura[]>([])
+  const [eventosAuditoria, setEventosAuditoria] = useState<AuditoriaEvento[]>([])
   const [tituloMaterial, setTituloMaterial] = useState('')
   const [descricaoMaterial, setDescricaoMaterial] = useState('')
+  const [categoriaMaterial, setCategoriaMaterial] = useState(CATEGORIAS_MATERIAIS[0])
   const [arquivoMaterial, setArquivoMaterial] = useState<File | null>(null)
   const [salvandoMaterial, setSalvandoMaterial] = useState(false)
   const [mensagemMaterial, setMensagemMaterial] = useState('')
@@ -50,6 +54,8 @@ export default function AdminPage() {
       setResultados(getDemoResultadosMes(mesNum))
       setTodosResultados(getDemoResultadosAnual(12))
       setMateriais([])
+      setLeiturasMateriais([])
+      setEventosAuditoria([])
       setLoading(false)
       return
     }
@@ -87,6 +93,14 @@ export default function AdminPage() {
     setTodosResultados(anuais ?? [])
     setMateriais(mats ?? [])
     setErroMaterial(matsError ? mensagemErroMateriais(matsError.message, matsError.code) : '')
+
+    const [leiturasResult, auditoriaResult] = await Promise.allSettled([
+      supabase.from('materiais_leituras').select('material_id, profile_id, read_at'),
+      supabase.from('auditoria_eventos').select('*').order('created_at', { ascending: false }).limit(5),
+    ])
+
+    setLeiturasMateriais(leiturasResult.status === 'fulfilled' ? (leiturasResult.value.data ?? []) : [])
+    setEventosAuditoria(auditoriaResult.status === 'fulfilled' ? (auditoriaResult.value.data ?? []) : [])
     setLoading(false)
   }, [mesNum, router])
 
@@ -182,6 +196,7 @@ export default function AdminPage() {
     const { error: insertError } = await supabase.from('materiais_informativos').insert({
       titulo,
       descricao: descricaoMaterial.trim() || null,
+      categoria: categoriaMaterial,
       file_name: arquivoMaterial.name,
       file_path: filePath,
       file_type: arquivoMaterial.type || null,
@@ -198,6 +213,7 @@ export default function AdminPage() {
 
     setTituloMaterial('')
     setDescricaoMaterial('')
+    setCategoriaMaterial(CATEGORIAS_MATERIAIS[0])
     setArquivoMaterial(null)
     setMensagemMaterial('Material anexado e liberado para as profissionais.')
     setSalvandoMaterial(false)
@@ -253,6 +269,18 @@ export default function AdminPage() {
   const totalGeral = totalBonus + totalComissoes
   const notasFeedback = rankingMensal.map(p => p.nota_feedback ?? 0).filter(nota => nota > 0)
   const mediaFeedback = notasFeedback.length > 0 ? notasFeedback.reduce((s, nota) => s + nota, 0) / notasFeedback.length : 0
+  const abaixoDoGatilho = rankingMensal.filter(p => p.realizado < cfg.meta_gatilho).length
+  const pertoDaMeta = rankingMensal.filter(p => p.pctMeta >= 80 && p.pctMeta < 100).length
+  const totalLeituras = leiturasMateriais.length
+  const totalLeiturasPossiveis = materiais.length * profiles.length
+
+  function categoriaDoMaterial(material: MaterialInformativo) {
+    return material.categoria || 'Comunicados'
+  }
+
+  function totalLeiturasMaterial(materialId: number) {
+    return leiturasMateriais.filter(leitura => leitura.material_id === materialId).length
+  }
 
   return (
     <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
@@ -323,6 +351,38 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+
+            <div className="responsive-grid executive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
+              {[
+                { label: 'Abaixo do gatilho', valor: `${abaixoDoGatilho}`, apoio: 'profissionais', cor: abaixoDoGatilho === 0 ? '#4ade80' : '#f87171' },
+                { label: 'Perto da meta', valor: `${pertoDaMeta}`, apoio: 'acima de 80%', cor: '#facc15' },
+                { label: 'Feedback medio', valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem notas', apoio: 'mes selecionado', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
+                { label: 'Materiais lidos', valor: totalLeiturasPossiveis > 0 ? `${totalLeituras}/${totalLeiturasPossiveis}` : '0/0', apoio: 'confirmacoes', cor: '#38bdf8' },
+              ].map((c, i) => (
+                <div key={i} className="glass-sm executive-card" style={{ padding: 18 }}>
+                  <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 8 }}>{c.label}</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: c.cor, marginBottom: 2 }}>{c.valor}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)' }}>{c.apoio}</div>
+                </div>
+              ))}
+            </div>
+
+            {eventosAuditoria.length > 0 && (
+              <div className="glass-sm audit-strip" style={{ padding: 16, marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <h2 style={{ fontSize: 14, fontWeight: 700 }}>Historico recente</h2>
+                  <span style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)' }}>Ultimas alteracoes salvas no banco</span>
+                </div>
+                <div className="audit-list" style={{ display: 'grid', gap: 8 }}>
+                  {eventosAuditoria.map(evento => (
+                    <div key={evento.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 8, fontSize: 12 }}>
+                      <span style={{ color: '#f0e6ff' }}>{evento.acao} em {evento.tabela}</span>
+                      <span style={{ color: 'rgba(240,230,255,0.45)' }}>{new Date(evento.created_at).toLocaleString('pt-BR')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Tabs */}
             <div className="tabs-scroll" style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
@@ -475,7 +535,7 @@ export default function AdminPage() {
                 </div>
 
                 <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <form onSubmit={handleUploadMaterial} className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.4fr 1.3fr auto', gap: 12, alignItems: 'end' }}>
+                  <form onSubmit={handleUploadMaterial} className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.2fr 0.9fr 1.2fr auto', gap: 12, alignItems: 'end' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Título</label>
                       <input className="input-field" value={tituloMaterial} onChange={e => setTituloMaterial(e.target.value)} placeholder="Ex.: Protocolo de atendimento" />
@@ -483,6 +543,14 @@ export default function AdminPage() {
                     <div>
                       <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Resumo</label>
                       <input className="input-field" value={descricaoMaterial} onChange={e => setDescricaoMaterial(e.target.value)} placeholder="Descrição breve para as profissionais" />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Categoria</label>
+                      <select className="input-field" value={categoriaMaterial} onChange={e => setCategoriaMaterial(e.target.value)}>
+                        {CATEGORIAS_MATERIAIS.map(categoria => (
+                          <option key={categoria} value={categoria} style={{ background: '#1a0a2e' }}>{categoria}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Arquivo</label>
@@ -514,7 +582,7 @@ export default function AdminPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                        {['Material','Arquivo','Tamanho','Status','Ações'].map(h => (
+                        {['Material','Categoria','Arquivo','Tamanho','Leituras','Status','Ações'].map(h => (
                           <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -526,8 +594,10 @@ export default function AdminPage() {
                             <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
                             {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
                           </td>
+                          <td style={{ padding: 16 }}><span className="material-category-badge">{categoriaDoMaterial(material)}</span></td>
                           <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{material.file_name}</td>
                           <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.5)', whiteSpace: 'nowrap' }}>{formatFileSize(material.file_size)}</td>
+                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{totalLeiturasMaterial(material.id)}/{profiles.length} cientes</td>
                           <td style={{ padding: 16 }}><span className={material.ativo ? 'badge-acima' : 'badge-abaixo'}>{material.ativo ? 'Visível' : 'Oculto'}</span></td>
                           <td style={{ padding: 16, whiteSpace: 'nowrap' }}>
                             <button type="button" onClick={() => handleAbrirMaterial(material)} style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.24)', color: '#7dd3fc', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8 }}>
@@ -541,7 +611,7 @@ export default function AdminPage() {
                       ))}
                       {materiais.length === 0 && (
                         <tr>
-                          <td colSpan={5} style={{ padding: 40, textAlign: 'center', color: 'rgba(240,230,255,0.35)', fontSize: 14 }}>
+                          <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: 'rgba(240,230,255,0.35)', fontSize: 14 }}>
                             Nenhum material anexado ainda.
                           </td>
                         </tr>
