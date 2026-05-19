@@ -1,5 +1,19 @@
 const ABA_ACESSOS = 'Acessos'
 const ABA_LEITURAS = 'Leituras de Materiais'
+const CABECALHO_LEITURAS = [
+  'Registrado em',
+  'E-mail',
+  'Nome',
+  'Perfil',
+  'ID do perfil',
+  'ID do material',
+  'Título do material',
+  'Arquivo',
+  'Categoria',
+  'Página',
+  'Origem',
+  'Navegador',
+]
 
 function doPost(e) {
   const lock = LockService.getScriptLock()
@@ -36,35 +50,13 @@ function doPost(e) {
     }
 
     if (payload.tipo === 'leitura_material') {
-      const sheet = getOrCreateSheet_(ss, ABA_LEITURAS, [
-        'Registrado em',
-        'E-mail',
-        'Nome',
-        'Perfil',
-        'ID do perfil',
-        'ID do material',
-        'Título do material',
-        'Arquivo',
-        'Categoria',
-        'Página',
-        'Origem',
-        'Navegador',
-      ])
+      const linhaLeitura = criarLinhaLeitura_(payload)
+      const sheet = getOrCreateSheet_(ss, ABA_LEITURAS, CABECALHO_LEITURAS)
+      sheet.appendRow(linhaLeitura)
 
-      sheet.appendRow([
-        payload.registrado_em || new Date().toISOString(),
-        payload.email || '',
-        payload.nome || '',
-        payload.perfil || '',
-        payload.profile_id || '',
-        payload.material_id || '',
-        payload.material_titulo || '',
-        payload.material_arquivo || '',
-        payload.material_categoria || '',
-        payload.pagina || '',
-        payload.origem || '',
-        payload.user_agent || '',
-      ])
+      const nomeAbaMaterial = criarNomeAbaMaterial_(payload)
+      const sheetMaterial = getOrCreateSheet_(ss, nomeAbaMaterial, CABECALHO_LEITURAS)
+      sheetMaterial.appendRow(linhaLeitura)
     }
 
     return ContentService
@@ -77,6 +69,34 @@ function doPost(e) {
   } finally {
     lock.releaseLock()
   }
+}
+
+function criarLinhaLeitura_(payload) {
+  return [
+    payload.registrado_em || new Date().toISOString(),
+    payload.email || '',
+    payload.nome || '',
+    payload.perfil || '',
+    payload.profile_id || '',
+    payload.material_id || '',
+    payload.material_titulo || '',
+    payload.material_arquivo || '',
+    payload.material_categoria || '',
+    payload.pagina || '',
+    payload.origem || '',
+    payload.user_agent || '',
+  ]
+}
+
+function criarNomeAbaMaterial_(payload) {
+  const base = payload.material_titulo || payload.material_arquivo || `Material ${payload.material_id || ''}`
+  const limpo = String(base)
+    .replace(/[\[\]\:\*\?\/\\]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 85)
+
+  return `Ciência - ${limpo || 'Material'}`
 }
 
 function getOrCreateSheet_(ss, name, headers) {

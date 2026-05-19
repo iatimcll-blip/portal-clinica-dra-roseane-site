@@ -327,15 +327,6 @@ export default function AdminPage() {
 
     const agora = new Date().toISOString()
     const supabase = createClient()
-    const { error } = await supabase
-      .from('materiais_leituras')
-      .upsert({ material_id: material.id, profile_id: profileIdAtual, read_at: agora }, { onConflict: 'material_id,profile_id' })
-
-    if (error) {
-      setErroMaterial('Nao foi possivel registrar a confirmacao de leitura. Execute o script de materiais no Supabase.')
-      return
-    }
-
     setLeiturasMateriais(prev => {
       const outrasLeituras = prev.filter(leitura => !(leitura.material_id === material.id && leitura.profile_id === profileIdAtual))
       return [...outrasLeituras, { material_id: material.id, profile_id: profileIdAtual, read_at: agora }]
@@ -351,6 +342,17 @@ export default function AdminPage() {
       material_arquivo: material.file_name,
       material_categoria: material.categoria,
     })
+
+    const { error } = await supabase
+      .from('materiais_leituras')
+      .upsert({ material_id: material.id, profile_id: profileIdAtual, read_at: agora }, { onConflict: 'material_id,profile_id' })
+
+    if (error) {
+      setErroMaterial('Confirmação enviada para o Google Sheets. O registro no Supabase ainda precisa do script de materiais.')
+      return
+    }
+
+    setErroMaterial('')
   }
 
   function trocarVideoYoutube(delta: number) {

@@ -294,15 +294,6 @@ export default function PainelProfissional() {
 
     const supabase = createClient()
     const agora = new Date().toISOString()
-    const { error } = await supabase
-      .from('materiais_leituras')
-      .upsert({ material_id: material.id, profile_id: profileId, read_at: agora }, { onConflict: 'material_id,profile_id' })
-
-    if (error) {
-      setErroMateriais('Nao foi possivel registrar a confirmacao de leitura. Execute o script de materiais no Supabase.')
-      return
-    }
-
     setLeiturasMateriais(prev => ({ ...prev, [material.id]: agora }))
     registrarEventoGoogleSheets({
       tipo: 'leitura_material',
@@ -315,6 +306,17 @@ export default function PainelProfissional() {
       material_arquivo: material.file_name,
       material_categoria: material.categoria,
     })
+
+    const { error } = await supabase
+      .from('materiais_leituras')
+      .upsert({ material_id: material.id, profile_id: profileId, read_at: agora }, { onConflict: 'material_id,profile_id' })
+
+    if (error) {
+      setErroMateriais('Confirmação enviada para o Google Sheets. O registro no Supabase ainda precisa do script de materiais.')
+      return
+    }
+
+    setErroMateriais('')
   }
 
   function categoriaDoMaterial(material: MaterialInformativo) {
