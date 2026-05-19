@@ -286,7 +286,7 @@ export default function PainelProfissional() {
   }
 
   async function confirmarLeitura(material: MaterialInformativo) {
-    if (!profileId) return
+    if (!profileId || !profile) return
     if (DEMO_MODE) {
       setLeiturasMateriais(prev => ({ ...prev, [material.id]: new Date().toISOString() }))
       return
