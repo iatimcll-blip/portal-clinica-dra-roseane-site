@@ -15,6 +15,7 @@ import {
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes, MaterialInformativo, MaterialLeitura } from '@/lib/types'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
+import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
@@ -59,6 +60,7 @@ export default function PainelProfissional() {
   const [mesSelecionado, setMesSelecionado] = useState(MESES_LISTA[new Date().getMonth()])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileId, setProfileId] = useState<string | null>(null)
+  const [profileEmail, setProfileEmail] = useState('')
   const [config, setConfig] = useState<ConfiguracoesMes | null>(null)
   const [realizado, setRealizado] = useState(0)
   const [notaFeedback, setNotaFeedback] = useState(0)
@@ -182,6 +184,7 @@ export default function PainelProfissional() {
         const prof = storedId ? getDemoProfile(storedId) : getDemoProfiles()[0]
         setProfile(prof)
         setProfileId(prof.id)
+        setProfileEmail('')
       })
       return
     }
@@ -193,6 +196,7 @@ export default function PainelProfissional() {
       if (!prof) { router.push('/login'); return }
       setProfile(prof)
       setProfileId(user.id)
+      setProfileEmail(user.email ?? '')
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -300,6 +304,17 @@ export default function PainelProfissional() {
     }
 
     setLeiturasMateriais(prev => ({ ...prev, [material.id]: agora }))
+    registrarEventoGoogleSheets({
+      tipo: 'leitura_material',
+      email: profileEmail,
+      nome: profile.nome,
+      perfil: profile.role,
+      profile_id: profileId,
+      material_id: material.id,
+      material_titulo: material.titulo,
+      material_arquivo: material.file_name,
+      material_categoria: material.categoria,
+    })
   }
 
   function categoriaDoMaterial(material: MaterialInformativo) {

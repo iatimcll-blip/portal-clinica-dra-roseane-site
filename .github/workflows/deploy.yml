@@ -43,6 +43,7 @@ jobs:
           NEXT_PUBLIC_DEMO_MODE: ${{ vars.NEXT_PUBLIC_DEMO_MODE || 'false' }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://dukmdxpgibycgsvgqrbf.supabase.co' }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1a21keHBnaWJ5Y2dzdmdxcmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MjE1NjMsImV4cCI6MjA5MzQ5NzU2M30.u-J4_T2fevqVjSQG10k-XokVl33AcArtlLTkYTvUG5U' }}
+          NEXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK_URL: ${{ vars.NEXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK_URL || '' }}
         shell: bash
         run: |
           if [ "${NEXT_PUBLIC_DEMO_MODE}" != "true" ]; then

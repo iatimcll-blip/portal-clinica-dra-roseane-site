@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import { DEMO_MODE, matchDemoProfileByEmail } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
+import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -51,11 +52,21 @@ export default function LoginPage() {
     const { data: { user } } = await supabase.auth.getUser()
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role,nome')
       .eq('id', user!.id)
       .single()
 
-    router.push(profile?.role === 'admin' || profile?.role === 'gestao' ? '/admin' : '/painel')
+    const destino = profile?.role === 'admin' || profile?.role === 'gestao' ? '/admin' : '/painel'
+    registrarEventoGoogleSheets({
+      tipo: 'acesso',
+      email: user?.email,
+      nome: profile?.nome,
+      perfil: profile?.role,
+      profile_id: user?.id,
+      destino,
+    })
+
+    router.push(destino)
     router.refresh()
   }
 

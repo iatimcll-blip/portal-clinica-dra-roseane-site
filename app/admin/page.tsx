@@ -16,6 +16,7 @@ import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
+import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 
 type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
 type PerfilAdmin = 'admin' | 'gestao'
@@ -47,6 +48,8 @@ export default function AdminPage() {
   const [erroMaterial, setErroMaterial] = useState('')
   const [perfilAdmin, setPerfilAdmin] = useState<PerfilAdmin>('admin')
   const [profileIdAtual, setProfileIdAtual] = useState('')
+  const [emailAtual, setEmailAtual] = useState('')
+  const [nomeAtual, setNomeAtual] = useState('')
   const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; baseUrl: string; pagina: number } | null>(null)
   const [totalPaginasPdf, setTotalPaginasPdf] = useState(0)
   const [carregandoPdf, setCarregandoPdf] = useState(false)
@@ -69,6 +72,8 @@ export default function AdminPage() {
       setEventosAuditoria([])
       setPerfilAdmin('admin')
       setProfileIdAtual('')
+      setEmailAtual('')
+      setNomeAtual('')
       setLoading(false)
       return
     }
@@ -83,7 +88,7 @@ export default function AdminPage() {
 
     const { data: currentProfile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role,nome')
       .eq('id', user.id)
       .single()
 
@@ -92,6 +97,8 @@ export default function AdminPage() {
       return
     }
     setProfileIdAtual(user.id)
+    setEmailAtual(user.email ?? '')
+    setNomeAtual(currentProfile.nome ?? '')
     setPerfilAdmin(user.email?.toLowerCase() === 'gestao@clinica.com' ? 'gestao' : currentProfile.role)
 
     const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }, { data: mats, error: matsError }] = await Promise.all([
@@ -332,6 +339,17 @@ export default function AdminPage() {
     setLeiturasMateriais(prev => {
       const outrasLeituras = prev.filter(leitura => !(leitura.material_id === material.id && leitura.profile_id === profileIdAtual))
       return [...outrasLeituras, { material_id: material.id, profile_id: profileIdAtual, read_at: agora }]
+    })
+    registrarEventoGoogleSheets({
+      tipo: 'leitura_material',
+      email: emailAtual,
+      nome: nomeAtual,
+      perfil: perfilAdmin,
+      profile_id: profileIdAtual,
+      material_id: material.id,
+      material_titulo: material.titulo,
+      material_arquivo: material.file_name,
+      material_categoria: material.categoria,
     })
   }
 
