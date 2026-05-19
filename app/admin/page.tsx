@@ -51,6 +51,7 @@ export default function AdminPage() {
   const [totalPaginasPdf, setTotalPaginasPdf] = useState(0)
   const [carregandoPdf, setCarregandoPdf] = useState(false)
   const [youtubeVideoIndex, setYoutubeVideoIndex] = useState(0)
+  const [youtubeMuted, setYoutubeMuted] = useState(true)
   const [loading, setLoading] = useState(true)
 
   const mesNum = mesNumero(mesSelecionado)
@@ -376,7 +377,7 @@ export default function AdminPage() {
     return acc
   }, {})
   const youtubeVideoId = YOUTUBE_VIDEO_IDS[youtubeVideoIndex] ?? YOUTUBE_VIDEO_IDS[0]
-  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&mute=1&playsinline=1&rel=0`
+  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&mute=${youtubeMuted ? '1' : '0'}&playsinline=1&rel=0&controls=1`
 
   function categoriaDoMaterial(material: MaterialInformativo) {
     return material.categoria || 'Comunicados'
@@ -520,6 +521,9 @@ export default function AdminPage() {
                       <button type="button" onClick={() => trocarVideoYoutube(-1)}>Anterior</button>
                       <span>Vídeo {youtubeVideoIndex + 1} de {YOUTUBE_VIDEO_IDS.length}</span>
                       <button type="button" onClick={() => trocarVideoYoutube(1)}>Próximo</button>
+                      <button type="button" onClick={() => setYoutubeMuted(atual => !atual)}>
+                        {youtubeMuted ? 'Ativar som' : 'Desativar som'}
+                      </button>
                     </div>
                     <div className="youtube-frame-shell">
                       <iframe
