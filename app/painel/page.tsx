@@ -44,6 +44,25 @@ const FRASES_MOTIVACIONAIS = [
   'Confie no processo: a evolução aparece quando você mantém o foco mesmo nos dias comuns.',
 ]
 
+function chaveLeiturasLocais(profileId: string) {
+  return `leituras_materiais_${profileId}`
+}
+
+function carregarLeiturasLocais(profileId: string) {
+  if (typeof window === 'undefined') return {}
+  try {
+    return JSON.parse(localStorage.getItem(chaveLeiturasLocais(profileId)) ?? '{}') as Record<number, string>
+  } catch {
+    return {}
+  }
+}
+
+function salvarLeituraLocal(profileId: string, materialId: number, readAt: string) {
+  if (typeof window === 'undefined') return
+  const leituras = carregarLeiturasLocais(profileId)
+  localStorage.setItem(chaveLeiturasLocais(profileId), JSON.stringify({ ...leituras, [materialId]: readAt }))
+}
+
 type DashboardProfissional = {
   realizado: number
   comissao_avaliacoes: number
@@ -170,10 +189,11 @@ export default function PainelProfissional() {
     setPosicaoAnual(painel?.posicao_anual ?? 1)
     setTotalClinicaMes(painel?.total_clinica ?? 0)
     setMateriais(materiaisData ?? [])
-    setLeiturasMateriais(((leiturasData ?? []) as MaterialLeitura[]).reduce<Record<number, string>>((acc, leitura) => {
+    const leiturasDoBanco = ((leiturasData ?? []) as MaterialLeitura[]).reduce<Record<number, string>>((acc, leitura) => {
       acc[leitura.material_id] = leitura.read_at
       return acc
-    }, {}))
+    }, {})
+    setLeiturasMateriais({ ...leiturasDoBanco, ...carregarLeiturasLocais(uid) })
     setErroMateriais(materiaisError ? 'Materiais informativos ainda não configurados no Supabase.' : '')
   }, [])
 
@@ -218,7 +238,8 @@ export default function PainelProfissional() {
   }, [])
 
   useEffect(() => {
-    const primeiroPdf = materiais.find(isPdfMaterial)
+    const primeiroPdfPendente = materiais.find(material => isPdfMaterial(material) && !leiturasMateriais[material.id])
+    const primeiroPdf = primeiroPdfPendente ?? materiais.find(isPdfMaterial)
     if (!primeiroPdf) {
       queueMicrotask(() => setVisualizadorPdf(null))
       return
@@ -227,7 +248,7 @@ export default function PainelProfissional() {
     if (!visualizadorPdf || !materiais.some(material => material.id === visualizadorPdf.materialId)) {
       queueMicrotask(() => carregarVisualizacaoPdf(primeiroPdf))
     }
-  }, [materiais, visualizadorPdf]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [materiais, leiturasMateriais, visualizadorPdf]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSair() {
     if (DEMO_MODE) {
@@ -288,12 +309,15 @@ export default function PainelProfissional() {
   async function confirmarLeitura(material: MaterialInformativo) {
     if (!profileId || !profile) return
     if (DEMO_MODE) {
-      setLeiturasMateriais(prev => ({ ...prev, [material.id]: new Date().toISOString() }))
+      const agoraDemo = new Date().toISOString()
+      salvarLeituraLocal(profileId, material.id, agoraDemo)
+      setLeiturasMateriais(prev => ({ ...prev, [material.id]: agoraDemo }))
       return
     }
 
     const supabase = createClient()
     const agora = new Date().toISOString()
+    salvarLeituraLocal(profileId, material.id, agora)
     setLeiturasMateriais(prev => ({ ...prev, [material.id]: agora }))
     registrarEventoGoogleSheets({
       tipo: 'leitura_material',
@@ -337,6 +361,10 @@ export default function PainelProfissional() {
   const pctAnual = metaAnual > 0 ? parseFloat(((acumuladoAnual / metaAnual) * 100).toFixed(1)) : 0
   const faltaMensal = Math.max(0, metaMax - realizado)
   const faltaAnual = Math.max(0, metaAnual - acumuladoAnual)
+  const materiaisPdf = materiais.filter(isPdfMaterial)
+  const materiaisPendentesCiencia = materiaisPdf.filter(material => !leiturasMateriais[material.id])
+  const precisaLiberarMateriais = materiaisPendentesCiencia.length > 0
+  const podeVisualizarDados = !precisaLiberarMateriais
   const materiaisAgrupados = materiais.reduce<Record<string, MaterialInformativo[]>>((acc, material) => {
     const categoria = categoriaDoMaterial(material)
     acc[categoria] = [...(acc[categoria] ?? []), material]
@@ -442,6 +470,20 @@ export default function PainelProfissional() {
           </select>
         </div>
 
+        {!podeVisualizarDados && (
+          <div className="glass-sm" style={{ padding: 24, marginBottom: 24, border: '1px solid rgba(250,204,21,0.22)', background: 'rgba(250,204,21,0.06)' }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, color: '#facc15' }}>Materiais pendentes de ciência</h2>
+            <p style={{ color: 'rgba(240,230,255,0.72)', fontSize: 14, lineHeight: 1.6 }}>
+              Para visualizar seus valores, metas e indicadores, leia todos os materiais informativos pendentes até a última página e clique em <strong>Li e estou ciente</strong>.
+            </p>
+            <div style={{ color: 'rgba(240,230,255,0.5)', fontSize: 12, marginTop: 10 }}>
+              Pendentes: {materiaisPendentesCiencia.length} de {materiaisPdf.length}
+            </div>
+          </div>
+        )}
+
+        {podeVisualizarDados && (
+          <>
         <div className="hero-summary" style={{
           background: 'linear-gradient(135deg, rgba(190,24,93,0.15), rgba(124,58,237,0.1))',
           border: '1px solid rgba(244,114,182,0.2)',
@@ -600,6 +642,8 @@ export default function PainelProfissional() {
             </div>
           </div>
         </div>
+          </>
+        )}
 
         <div id="painel-materiais" className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>📎 Materiais informativos</h3>
@@ -619,6 +663,9 @@ export default function PainelProfissional() {
                 <div className="material-category-title">{categoria}</div>
                 {itens.map(material => {
                   const lidoEm = leiturasMateriais[material.id]
+                  const materialAberto = visualizadorPdf?.materialId === material.id
+                  const chegouAoFinal = Boolean(materialAberto && totalPaginasPdf > 0 && visualizadorPdf && visualizadorPdf.pagina >= totalPaginasPdf)
+                  const podeConfirmarCiencia = Boolean(lidoEm) || chegouAoFinal
                   return (
                     <div key={material.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 220, flex: '1 1 260px' }}>
@@ -651,11 +698,17 @@ export default function PainelProfissional() {
                         <button
                           type="button"
                           onClick={() => confirmarLeitura(material)}
-                          disabled={Boolean(lidoEm)}
+                          disabled={Boolean(lidoEm) || !podeConfirmarCiencia}
                           className="material-read-button"
+                          title={!lidoEm && !podeConfirmarCiencia ? 'Leia o material até a última página para habilitar a ciência.' : undefined}
                         >
                           {lidoEm ? `Ciente em ${new Date(lidoEm).toLocaleDateString('pt-BR')}` : 'Li e estou ciente'}
                         </button>
+                        {!lidoEm && !podeConfirmarCiencia && isPdfMaterial(material) && (
+                          <div style={{ flexBasis: '100%', fontSize: 11, color: 'rgba(240,230,255,0.45)' }}>
+                            O botão será liberado ao chegar na última página.
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
