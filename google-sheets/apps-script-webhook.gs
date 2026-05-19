@@ -37,7 +37,7 @@ function doPost(e) {
       ])
 
       sheet.appendRow([
-        payload.registrado_em || new Date().toISOString(),
+        formatarDataHoraBrasil_(payload.registrado_em),
         payload.email || '',
         payload.nome || '',
         payload.perfil || '',
@@ -73,7 +73,7 @@ function doPost(e) {
 
 function criarLinhaLeitura_(payload) {
   return [
-    payload.registrado_em || new Date().toISOString(),
+    formatarDataHoraBrasil_(payload.registrado_em),
     payload.email || '',
     payload.nome || '',
     payload.perfil || '',
@@ -86,6 +86,15 @@ function criarLinhaLeitura_(payload) {
     payload.origem || '',
     payload.user_agent || '',
   ]
+}
+
+function formatarDataHoraBrasil_(valor) {
+  const data = valor ? new Date(valor) : new Date()
+  if (isNaN(data.getTime())) {
+    return Utilities.formatDate(new Date(), 'America/Fortaleza', 'dd/MM/yyyy HH:mm:ss')
+  }
+
+  return Utilities.formatDate(data, 'America/Fortaleza', 'dd/MM/yyyy HH:mm:ss')
 }
 
 function criarNomeAbaMaterial_(payload) {
