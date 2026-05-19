@@ -12,6 +12,7 @@ import {
 } from '@/lib/formulas'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import AlterarSenhaCard from '@/components/AlterarSenhaCard'
+import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
@@ -20,6 +21,8 @@ type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
 type PerfilAdmin = 'admin' | 'gestao'
 
 const BUCKET_MATERIAIS = 'materiais-informativos'
+const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
+const YOUTUBE_VIDEO_IDS = ['gK8WPJ6WsOQ', '6fptiuW0ck0', 'lswlKf-q_bU', 'Zj1PE4m9wPQ']
 const LIMITE_MATERIAL_BYTES = 50 * 1024 * 1024
 const EXTENSOES_MATERIAIS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'csv', 'mp4', 'mov', 'zip']
 const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos']
@@ -43,6 +46,11 @@ export default function AdminPage() {
   const [mensagemMaterial, setMensagemMaterial] = useState('')
   const [erroMaterial, setErroMaterial] = useState('')
   const [perfilAdmin, setPerfilAdmin] = useState<PerfilAdmin>('admin')
+  const [profileIdAtual, setProfileIdAtual] = useState('')
+  const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; baseUrl: string; pagina: number } | null>(null)
+  const [totalPaginasPdf, setTotalPaginasPdf] = useState(0)
+  const [carregandoPdf, setCarregandoPdf] = useState(false)
+  const [youtubeVideoIndex, setYoutubeVideoIndex] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const mesNum = mesNumero(mesSelecionado)
@@ -59,6 +67,7 @@ export default function AdminPage() {
       setLeiturasMateriais([])
       setEventosAuditoria([])
       setPerfilAdmin('admin')
+      setProfileIdAtual('')
       setLoading(false)
       return
     }
@@ -81,6 +90,7 @@ export default function AdminPage() {
       router.push('/painel')
       return
     }
+    setProfileIdAtual(user.id)
     setPerfilAdmin(user.email?.toLowerCase() === 'gestao@clinica.com' ? 'gestao' : currentProfile.role)
 
     const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }, { data: mats, error: matsError }] = await Promise.all([
@@ -109,6 +119,25 @@ export default function AdminPage() {
   }, [mesNum, router])
 
   useEffect(() => { queueMicrotask(() => { carregarDados() }) }, [carregarDados])
+
+  useEffect(() => {
+    const indiceVideo = Math.floor(Math.random() * YOUTUBE_VIDEO_IDS.length)
+    queueMicrotask(() => setYoutubeVideoIndex(indiceVideo))
+  }, [])
+
+  useEffect(() => {
+    if (perfilAdmin !== 'gestao') return
+
+    const primeiroPdf = materiais.filter(material => material.ativo).find(isPdfMaterial)
+    if (!primeiroPdf) {
+      queueMicrotask(() => setVisualizadorPdf(null))
+      return
+    }
+
+    if (!visualizadorPdf || !materiais.some(material => material.ativo && material.id === visualizadorPdf.materialId)) {
+      queueMicrotask(() => carregarVisualizacaoPdf(primeiroPdf))
+    }
+  }, [materiais, perfilAdmin, visualizadorPdf]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSair() {
     if (DEMO_MODE) {
@@ -251,6 +280,64 @@ export default function AdminPage() {
     window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
+  function isPdfMaterial(material: MaterialInformativo) {
+    return material.file_type === 'application/pdf' || material.file_name.toLowerCase().endsWith('.pdf')
+  }
+
+  async function carregarVisualizacaoPdf(material: MaterialInformativo) {
+    if (!isPdfMaterial(material)) {
+      setErroMaterial('A visualizacao dentro do painel esta disponivel para arquivos PDF.')
+      return
+    }
+
+    setCarregandoPdf(true)
+    const supabase = createClient()
+    const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(material.file_path, 60 * 60)
+
+    if (error || !data?.signedUrl) {
+      setErroMaterial('Nao foi possivel abrir este material agora.')
+      setCarregandoPdf(false)
+      return
+    }
+
+    setErroMaterial('')
+    setVisualizadorPdf({ materialId: material.id, titulo: material.titulo, baseUrl: data.signedUrl, pagina: 1 })
+    setTotalPaginasPdf(0)
+    setCarregandoPdf(false)
+  }
+
+  function mudarPaginaPdf(delta: number) {
+    setVisualizadorPdf(atual => {
+      if (!atual) return atual
+      const proxima = Math.max(1, atual.pagina + delta)
+      return { ...atual, pagina: totalPaginasPdf > 0 ? Math.min(proxima, totalPaginasPdf) : proxima }
+    })
+  }
+
+  async function confirmarLeituraGestao(material: MaterialInformativo) {
+    if (!profileIdAtual) return
+
+    const agora = new Date().toISOString()
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('materiais_leituras')
+      .upsert({ material_id: material.id, profile_id: profileIdAtual, read_at: agora }, { onConflict: 'material_id,profile_id' })
+
+    if (error) {
+      setErroMaterial('Nao foi possivel registrar a confirmacao de leitura. Execute o script de materiais no Supabase.')
+      return
+    }
+
+    setLeiturasMateriais(prev => {
+      const outrasLeituras = prev.filter(leitura => !(leitura.material_id === material.id && leitura.profile_id === profileIdAtual))
+      return [...outrasLeituras, { material_id: material.id, profile_id: profileIdAtual, read_at: agora }]
+    })
+  }
+
+  function trocarVideoYoutube(delta: number) {
+    setYoutubeVideoIndex(atual => (atual + delta + YOUTUBE_VIDEO_IDS.length) % YOUTUBE_VIDEO_IDS.length)
+  }
+
   const cfg = config ?? { meta_clinica: 55000, meta_gatilho: 15000, meta_max: 18000, meta_individual_anual: 187000 }
 
   function getRes(profileId: string) {
@@ -278,6 +365,18 @@ export default function AdminPage() {
   const totalLeituras = leiturasMateriais.length
   const totalLeiturasPossiveis = materiais.length * profiles.length
   const podeEditar = perfilAdmin === 'admin'
+  const materiaisVisiveisGestao = materiais.filter(material => material.ativo)
+  const leiturasGestao = leiturasMateriais.reduce<Record<number, string>>((acc, leitura) => {
+    if (leitura.profile_id === profileIdAtual) acc[leitura.material_id] = leitura.read_at
+    return acc
+  }, {})
+  const materiaisAgrupados = materiaisVisiveisGestao.reduce<Record<string, MaterialInformativo[]>>((acc, material) => {
+    const categoria = categoriaDoMaterial(material)
+    acc[categoria] = [...(acc[categoria] ?? []), material]
+    return acc
+  }, {})
+  const youtubeVideoId = YOUTUBE_VIDEO_IDS[youtubeVideoIndex] ?? YOUTUBE_VIDEO_IDS[0]
+  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&mute=1&playsinline=1&rel=0`
 
   function categoriaDoMaterial(material: MaterialInformativo) {
     return material.categoria || 'Comunicados'
@@ -391,6 +490,158 @@ export default function AdminPage() {
                   ))}
                 </div>
               </div>
+            )}
+
+            {perfilAdmin === 'gestao' && (
+              <>
+                <div className="professional-content-row">
+                  <div style={{
+                    background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(190,24,93,0.08))',
+                    border: '1px solid rgba(192,132,252,0.15)',
+                    borderRadius: 16, padding: 24,
+                  }}>
+                    <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)', marginBottom: 8 }}>Mensagem do mês</div>
+                    <div style={{ fontSize: 15, color: '#f0e6ff', lineHeight: 1.6 }}>
+                      Acompanhe os materiais e conteúdos liberados para manter a equipe alinhada.
+                    </div>
+                  </div>
+
+                  <div className="youtube-window">
+                    <div className="youtube-window-header">
+                      <div>
+                        <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)', marginBottom: 4 }}>Conteúdos da Dra. Roseane</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#f0e6ff' }}>Vídeos para assistir no painel</div>
+                      </div>
+                      <a href={YOUTUBE_CANAL_URL} target="_blank" rel="noreferrer" className="youtube-channel-link">
+                        Canal
+                      </a>
+                    </div>
+                    <div className="youtube-controls">
+                      <button type="button" onClick={() => trocarVideoYoutube(-1)}>Anterior</button>
+                      <span>Vídeo {youtubeVideoIndex + 1} de {YOUTUBE_VIDEO_IDS.length}</span>
+                      <button type="button" onClick={() => trocarVideoYoutube(1)}>Próximo</button>
+                    </div>
+                    <div className="youtube-frame-shell">
+                      <iframe
+                        key={youtubeVideoId}
+                        src={youtubeEmbedUrl}
+                        title="Vídeos do canal Dra. Roseane Débora"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div id="painel-materiais" className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Materiais informativos</h3>
+                  <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
+                    Arquivos liberados pela administração para consulta.
+                  </p>
+
+                  {erroMaterial && (
+                    <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.16)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#facc15', marginBottom: 14 }}>
+                      {erroMaterial}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gap: 18 }}>
+                    {Object.entries(materiaisAgrupados).map(([categoria, itens]) => (
+                      <section key={categoria} style={{ display: 'grid', gap: 10 }}>
+                        <div className="material-category-title">{categoria}</div>
+                        {itens.map(material => {
+                          const lidoEm = leiturasGestao[material.id]
+                          return (
+                          <div key={material.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
+                            <div style={{ minWidth: 220, flex: '1 1 260px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
+                                {lidoEm && <span className="material-read-badge">Ciente</span>}
+                              </div>
+                              {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
+                              <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
+                            </div>
+                            <div className="material-actions">
+                              <button
+                                type="button"
+                                onClick={() => carregarVisualizacaoPdf(material)}
+                                disabled={!isPdfMaterial(material) || carregandoPdf}
+                                style={{
+                                  background: visualizadorPdf?.materialId === material.id ? 'rgba(74,222,128,0.16)' : 'linear-gradient(135deg,#be185d,#7c3aed)',
+                                  border: visualizadorPdf?.materialId === material.id ? '1px solid rgba(74,222,128,0.28)' : 0,
+                                  color: visualizadorPdf?.materialId === material.id ? '#86efac' : 'white',
+                                  borderRadius: 10,
+                                  padding: '10px 14px',
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  cursor: isPdfMaterial(material) ? 'pointer' : 'not-allowed',
+                                  opacity: isPdfMaterial(material) ? 1 : 0.55,
+                                }}
+                              >
+                                {isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => confirmarLeituraGestao(material)}
+                                disabled={Boolean(lidoEm)}
+                                className="material-read-button"
+                              >
+                                {lidoEm ? `Ciente em ${new Date(lidoEm).toLocaleDateString('pt-BR')}` : 'Li e estou ciente'}
+                              </button>
+                            </div>
+                          </div>
+                          )
+                        })}
+                      </section>
+                    ))}
+                    {materiaisVisiveisGestao.length === 0 && !erroMaterial && (
+                      <div style={{ textAlign: 'center', color: 'rgba(240,230,255,0.35)', fontSize: 14, padding: '22px 10px' }}>
+                        Nenhum material informativo disponível no momento.
+                      </div>
+                    )}
+                  </div>
+
+                  {(visualizadorPdf || carregandoPdf) && (
+                    <div className="material-viewer-panel">
+                      <div className="material-viewer-header">
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {visualizadorPdf?.titulo ?? 'Carregando documento...'}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginTop: 3 }}>
+                            O documento fica aberto aqui no painel. Use os botões para seguir ou voltar páginas.
+                          </div>
+                        </div>
+                        {visualizadorPdf && (
+                          <div className="material-page-controls">
+                            <button type="button" onClick={() => mudarPaginaPdf(-1)} disabled={visualizadorPdf.pagina <= 1} className="material-page-button">
+                              Voltar página
+                            </button>
+                            <div className="material-page-counter">Página {visualizadorPdf.pagina}{totalPaginasPdf > 0 ? ` de ${totalPaginasPdf}` : ''}</div>
+                            <button type="button" onClick={() => mudarPaginaPdf(1)} disabled={totalPaginasPdf > 0 && visualizadorPdf.pagina >= totalPaginasPdf} className="material-page-button">
+                              Próxima página
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {visualizadorPdf ? (
+                        <PdfPageViewer
+                          key={visualizadorPdf.materialId}
+                          page={visualizadorPdf.pagina}
+                          title={visualizadorPdf.titulo}
+                          url={visualizadorPdf.baseUrl}
+                          onPageCount={setTotalPaginasPdf}
+                        />
+                      ) : (
+                        <div style={{ minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(240,230,255,0.45)', fontSize: 14 }}>
+                          Preparando visualização...
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+              </>
             )}
 
             {/* Tabs */}
