@@ -16,7 +16,7 @@ import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
-import { buscarLeiturasMateriaisGoogleSheets, registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
+import { buscarLeiturasMateriaisGoogleSheets, buscarMensagensGoogleSheets, registrarEventoGoogleSheets, type GoogleSheetsMessageRow } from '@/lib/google-sheets-sync'
 import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
 
 type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
@@ -76,6 +76,10 @@ export default function AdminPage() {
   const [carregandoPdf, setCarregandoPdf] = useState(false)
   const [youtubeVideoIndex, setYoutubeVideoIndex] = useState(0)
   const [youtubeMuted, setYoutubeMuted] = useState(true)
+  const [mensagensRecebidas, setMensagensRecebidas] = useState<GoogleSheetsMessageRow[]>([])
+  const [mensagemGestaoAdmin, setMensagemGestaoAdmin] = useState('')
+  const [statusMensagemGestao, setStatusMensagemGestao] = useState('')
+  const [enviandoMensagemGestao, setEnviandoMensagemGestao] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const mesNum = mesNumero(mesSelecionado)
@@ -159,6 +163,10 @@ export default function AdminPage() {
     setLeiturasMateriais(Array.from(leiturasUnicas.values()))
     setEventosAuditoria(auditoriaResult.status === 'fulfilled' ? (auditoriaResult.value.data ?? []) : [])
     setLoading(false)
+
+    buscarMensagensGoogleSheets()
+      .then(mensagens => setMensagensRecebidas(mensagens))
+      .catch(() => setMensagensRecebidas([]))
 
     buscarLeiturasMateriaisGoogleSheets()
       .then(linhasGoogle => {
@@ -424,6 +432,34 @@ export default function AdminPage() {
     setErroMaterial('')
   }
 
+  function enviarMensagemGestaoAdmin(event: React.SyntheticEvent) {
+    event.preventDefault()
+    if (!profileIdAtual) return
+
+    const texto = mensagemGestaoAdmin.trim()
+    if (texto.length < 5) {
+      setStatusMensagemGestao('Escreva uma mensagem com pelo menos 5 caracteres.')
+      return
+    }
+
+    setEnviandoMensagemGestao(true)
+    setStatusMensagemGestao('')
+
+    registrarEventoGoogleSheets({
+      tipo: 'mensagem_texto',
+      email: emailAtual,
+      nome: nomeAtual,
+      perfil: perfilAdmin,
+      profile_id: profileIdAtual,
+      mensagem: texto,
+      destino: 'admin',
+    })
+
+    setMensagemGestaoAdmin('')
+    setStatusMensagemGestao('Mensagem enviada para o Admin e registrada no Google Sheets.')
+    window.setTimeout(() => setEnviandoMensagemGestao(false), 500)
+  }
+
   function trocarVideoYoutube(delta: number) {
     setYoutubeVideoIndex(atual => (atual + delta + YOUTUBE_VIDEO_IDS.length) % YOUTUBE_VIDEO_IDS.length)
   }
@@ -469,6 +505,8 @@ export default function AdminPage() {
     materiaisObrigatorios.length > 0 && !materiaisObrigatorios.every(material => assinaturasUnicas.has(`${profile.id}:${material.id}`)),
   )
   const profissionaisComCienciaCompleta = profissionaisComCienciaCompletaLista.length
+  const totalMensagensRecebidas = mensagensRecebidas.length
+  const ultimaMensagemRecebida = mensagensRecebidas[0]
   const podeEditar = perfilAdmin === 'admin'
   const materiaisVisiveisGestao = materiais.filter(material => material.ativo)
   const leiturasGestao = leiturasMateriais.reduce<Record<number, string>>((acc, leitura) => {
@@ -569,12 +607,13 @@ export default function AdminPage() {
               ))}
             </div>
 
-            <div className="responsive-grid executive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
+            <div className="responsive-grid executive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 16, marginBottom: 24 }}>
               {[
                 { label: 'Abaixo do gatilho', valor: `${abaixoDoGatilho}`, apoio: 'profissionais', cor: abaixoDoGatilho === 0 ? '#4ade80' : '#f87171' },
                 { label: 'Perto da meta', valor: `${pertoDaMeta}`, apoio: 'acima de 80%', cor: '#facc15' },
                 { label: 'Feedback medio', valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem notas', apoio: 'mes selecionado', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
                 { label: 'Profissionais cientes', valor: totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : '0/0', apoio: `${totalLeituras}/${totalLeiturasPossiveis} assinaturas${resumoLeiturasGoogle ? ` · Sheets ${resumoLeiturasGoogle.totalCompatibilizado}` : ''}`, cor: '#38bdf8' },
+                { label: 'Mensagens recebidas', valor: `${totalMensagensRecebidas}`, apoio: ultimaMensagemRecebida?.nome ? `ultima: ${ultimaMensagemRecebida.nome}` : 'aba Mensagens', cor: totalMensagensRecebidas > 0 ? '#f472b6' : 'rgba(240,230,255,0.45)' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm executive-card" style={{ padding: 18 }}>
                   <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 8 }}>{c.label}</div>
@@ -604,6 +643,22 @@ export default function AdminPage() {
                             <p>Todas as profissionais assinaram.</p>
                           )}
                         </div>
+                      </div>
+                    </div>
+                  )}
+                  {c.label === 'Mensagens recebidas' && (
+                    <div className="message-popover-trigger" tabIndex={0} aria-label="Ver indicador de mensagens recebidas">
+                      Ver indicação
+                      <div className="message-popover">
+                        <div className="awareness-popover-title">Mensagens</div>
+                        <p>
+                          {totalMensagensRecebidas > 0
+                            ? `${totalMensagensRecebidas} mensagem(ns) registradas na aba Mensagens do Google Sheets.`
+                            : 'Nenhuma mensagem registrada no Google Sheets até agora.'}
+                        </p>
+                        {ultimaMensagemRecebida?.nome && (
+                          <p>Último envio: {ultimaMensagemRecebida.nome}</p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -670,6 +725,38 @@ export default function AdminPage() {
                       />
                     </div>
                   </div>
+                </div>
+
+                <div id="painel-mensagem-admin" className="glass-sm message-panel" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 14 }}>
+                    <div>
+                      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Mensagem para o Admin</h3>
+                      <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)' }}>
+                        Envie uma observação da gestão. A mensagem ficará registrada na aba Mensagens do Google Sheets.
+                      </p>
+                    </div>
+                    <span className="message-panel-badge">Registro no Sheets</span>
+                  </div>
+                  <form onSubmit={enviarMensagemGestaoAdmin} className="message-form">
+                    <textarea
+                      className="input-field message-textarea"
+                      value={mensagemGestaoAdmin}
+                      onChange={event => setMensagemGestaoAdmin(event.target.value)}
+                      maxLength={600}
+                      placeholder="Escreva sua mensagem para o Admin..."
+                    />
+                    <div className="message-form-footer">
+                      <span>{mensagemGestaoAdmin.length}/600</span>
+                      <button type="submit" className="btn-primary" disabled={enviandoMensagemGestao || mensagemGestaoAdmin.trim().length < 5}>
+                        {enviandoMensagemGestao ? 'Enviando...' : 'Enviar mensagem'}
+                      </button>
+                    </div>
+                  </form>
+                  {statusMensagemGestao && (
+                    <div className="message-panel-status">
+                      {statusMensagemGestao}
+                    </div>
+                  )}
                 </div>
 
                 <div id="painel-materiais" className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>

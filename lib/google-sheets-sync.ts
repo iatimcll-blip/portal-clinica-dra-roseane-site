@@ -18,7 +18,13 @@ type MaterialReadEvent = SheetsEventBase & {
   material_categoria?: string | null
 }
 
-type SheetsEvent = AccessEvent | MaterialReadEvent
+type MessageEvent = SheetsEventBase & {
+  tipo: 'mensagem_texto'
+  mensagem: string
+  destino?: 'admin'
+}
+
+type SheetsEvent = AccessEvent | MaterialReadEvent | MessageEvent
 
 const GOOGLE_SHEETS_WEBHOOK_URL = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK_URL
 
@@ -38,6 +44,17 @@ type GoogleSheetsReadRow = {
   material_titulo?: string
   material_arquivo?: string
   categoria?: string
+}
+
+export type GoogleSheetsMessageRow = {
+  registrado_em?: string
+  email?: string
+  nome?: string
+  perfil?: string
+  profile_id?: string
+  mensagem?: string
+  destino?: string
+  pagina?: string
 }
 
 export function registrarEventoGoogleSheets(evento: SheetsEvent) {
@@ -101,6 +118,45 @@ export function buscarLeiturasMateriaisGoogleSheets(): Promise<GoogleSheetsReadR
     script.onerror = () => {
       cleanup()
       reject(new Error('Nao foi possivel carregar o retorno do Google Sheets.'))
+    }
+
+    document.body.appendChild(script)
+  })
+}
+
+export function buscarMensagensGoogleSheets(): Promise<GoogleSheetsMessageRow[]> {
+  if (!GOOGLE_SHEETS_WEBHOOK_URL || typeof window === 'undefined') return Promise.resolve([])
+
+  return new Promise((resolve, reject) => {
+    const callbackName = `googleSheetsMensagens_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    const script = document.createElement('script')
+    const timeout = window.setTimeout(() => {
+      cleanup()
+      reject(new Error('Tempo esgotado ao consultar as mensagens no Google Sheets.'))
+    }, 6000)
+
+    function cleanup() {
+      window.clearTimeout(timeout)
+      script.remove()
+      delete (window as unknown as Record<string, unknown>)[callbackName]
+    }
+
+    ;(window as unknown as Record<string, (payload: JsonpResponse<GoogleSheetsMessageRow[]>) => void>)[callbackName] = payload => {
+      cleanup()
+      if (!payload?.ok) {
+        reject(new Error(payload?.error || 'Nao foi possivel consultar as mensagens no Google Sheets.'))
+        return
+      }
+      resolve(payload.data ?? [])
+    }
+
+    const url = new URL(GOOGLE_SHEETS_WEBHOOK_URL)
+    url.searchParams.set('tipo', 'mensagens')
+    url.searchParams.set('callback', callbackName)
+    script.src = url.toString()
+    script.onerror = () => {
+      cleanup()
+      reject(new Error('Nao foi possivel carregar as mensagens do Google Sheets.'))
     }
 
     document.body.appendChild(script)

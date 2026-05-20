@@ -343,6 +343,103 @@ body {
   margin: 0;
 }
 
+.message-popover-trigger {
+  width: fit-content;
+  margin-top: 10px;
+  border: 1px solid rgba(244,114,182,0.26);
+  background: rgba(244,114,182,0.1);
+  color: #f9a8d4;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: default;
+  outline: none;
+}
+
+.message-popover {
+  position: absolute;
+  right: 12px;
+  top: calc(100% - 8px);
+  z-index: 30;
+  width: min(310px, calc(100vw - 48px));
+  display: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(18,7,29,0.98);
+  box-shadow: 0 22px 60px rgba(0,0,0,0.46);
+  border-radius: 14px;
+  padding: 14px;
+  color: #f0e6ff;
+}
+
+.message-popover-trigger:hover .message-popover,
+.message-popover-trigger:focus .message-popover,
+.message-popover-trigger:focus-within .message-popover {
+  display: grid;
+  gap: 8px;
+}
+
+.message-popover p {
+  color: rgba(240,230,255,0.72);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.message-panel {
+  border: 1px solid rgba(244,114,182,0.12);
+  background:
+    linear-gradient(135deg, rgba(244,114,182,0.07), rgba(124,58,237,0.04)),
+    rgba(255,255,255,0.03);
+}
+
+.message-panel-badge {
+  flex-shrink: 0;
+  color: #f9a8d4;
+  border: 1px solid rgba(244,114,182,0.26);
+  background: rgba(244,114,182,0.1);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.message-form {
+  display: grid;
+  gap: 12px;
+}
+
+.message-textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.message-form-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.message-form-footer span {
+  color: rgba(240,230,255,0.42);
+  font-size: 12px;
+}
+
+.message-panel-status {
+  margin-top: 12px;
+  border: 1px solid rgba(74,222,128,0.18);
+  background: rgba(74,222,128,0.08);
+  color: #86efac;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .mobile-bottom-nav {
   display: none;
 }
@@ -591,7 +688,7 @@ body {
     bottom: 10px;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 6px;
     padding: 8px;
     border-radius: 16px;
@@ -605,7 +702,7 @@ body {
     color: rgba(240,230,255,0.72);
     text-decoration: none;
     text-align: center;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
     padding: 9px 4px;
     border-radius: 10px;

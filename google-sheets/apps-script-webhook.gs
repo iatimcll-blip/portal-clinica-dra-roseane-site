@@ -1,5 +1,6 @@
 var ABA_ACESSOS = 'Acessos'
 var ABA_LEITURAS = 'Leituras de Materiais'
+var ABA_MENSAGENS = 'Mensagens'
 
 var CABECALHO_LEITURAS = [
   'Registrado em',
@@ -16,10 +17,31 @@ var CABECALHO_LEITURAS = [
   'Navegador',
 ]
 
+var CABECALHO_MENSAGENS = [
+  'Registrado em',
+  'E-mail',
+  'Nome',
+  'Perfil',
+  'ID do perfil',
+  'Mensagem',
+  'Destino',
+  'Pagina',
+  'Origem',
+  'Navegador',
+]
+
 function doGet(e) {
   try {
     var tipo = e && e.parameter ? e.parameter.tipo : ''
     var callback = e && e.parameter ? e.parameter.callback : ''
+
+    if (tipo === 'mensagens') {
+      var ssMensagens = SpreadsheetApp.getActiveSpreadsheet()
+      var sheetMensagens = getOrCreateSheet_(ssMensagens, ABA_MENSAGENS, CABECALHO_MENSAGENS)
+      var mensagens = listarMensagens_(sheetMensagens)
+
+      return responderJson_({ ok: true, data: mensagens }, callback)
+    }
 
     if (tipo !== 'leituras_materiais') {
       return responderJson_({ ok: false, error: 'Tipo de consulta invalido.' }, callback)
@@ -92,6 +114,24 @@ function doPost(e) {
       }
     }
 
+    if (payload.tipo === 'mensagem_texto') {
+      var sheetMensagens = getOrCreateSheet_(ss, ABA_MENSAGENS, CABECALHO_MENSAGENS)
+
+      prepararColunaDataHora_(sheetMensagens)
+      sheetMensagens.appendRow([
+        formatarDataHoraBrasil_(payload.registrado_em),
+        payload.email || '',
+        payload.nome || '',
+        payload.perfil || '',
+        payload.profile_id || '',
+        payload.mensagem || '',
+        payload.destino || 'admin',
+        payload.pagina || '',
+        payload.origem || '',
+        payload.user_agent || '',
+      ])
+    }
+
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true }))
       .setMimeType(ContentService.MimeType.JSON)
@@ -135,6 +175,30 @@ function listarLeiturasMateriaisUnicas_(sheet) {
   })
 
   return saida
+}
+
+function listarMensagens_(sheet) {
+  var lastRow = sheet.getLastRow()
+  if (lastRow < 2) return []
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, CABECALHO_MENSAGENS.length).getValues()
+  return rows
+    .filter(function(row) {
+      return String(row[5] || '').trim() !== ''
+    })
+    .map(function(row) {
+      return {
+        registrado_em: String(row[0] || ''),
+        email: String(row[1] || ''),
+        nome: String(row[2] || ''),
+        perfil: String(row[3] || ''),
+        profile_id: String(row[4] || ''),
+        mensagem: String(row[5] || ''),
+        destino: String(row[6] || ''),
+        pagina: String(row[7] || ''),
+      }
+    })
+    .reverse()
 }
 
 function normalizarChave_(valor) {
@@ -191,6 +255,28 @@ function testarLeituraMaterial() {
         material_arquivo: 'teste-ciencia-codex.pdf',
         material_categoria: 'Comunicados',
         pagina: '/painel',
+        origem: 'teste-manual',
+        user_agent: 'Apps Script',
+      }),
+    },
+  }
+
+  return doPost(e)
+}
+
+function testarMensagem() {
+  var e = {
+    postData: {
+      contents: JSON.stringify({
+        tipo: 'mensagem_texto',
+        registrado_em: new Date().toISOString(),
+        email: 'gestao@clinica.com',
+        nome: 'Gestao',
+        perfil: 'gestao',
+        profile_id: 'teste-gestao',
+        mensagem: 'Mensagem de teste para o Admin.',
+        destino: 'admin',
+        pagina: '/admin',
         origem: 'teste-manual',
         user_agent: 'Apps Script',
       }),

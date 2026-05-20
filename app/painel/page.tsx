@@ -99,6 +99,9 @@ export default function PainelProfissional() {
   const [fraseMotivacional, setFraseMotivacional] = useState('')
   const [youtubeVideoIndex, setYoutubeVideoIndex] = useState(0)
   const [youtubeMuted, setYoutubeMuted] = useState(true)
+  const [mensagemAdmin, setMensagemAdmin] = useState('')
+  const [statusMensagemAdmin, setStatusMensagemAdmin] = useState('')
+  const [enviandoMensagemAdmin, setEnviandoMensagemAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string, currentProfile: Profile) => {
@@ -367,6 +370,34 @@ export default function PainelProfissional() {
     }
 
     setErroMateriais('')
+  }
+
+  function enviarMensagemAdmin(event: React.SyntheticEvent) {
+    event.preventDefault()
+    if (!profileId || !profile) return
+
+    const texto = mensagemAdmin.trim()
+    if (texto.length < 5) {
+      setStatusMensagemAdmin('Escreva uma mensagem com pelo menos 5 caracteres.')
+      return
+    }
+
+    setEnviandoMensagemAdmin(true)
+    setStatusMensagemAdmin('')
+
+    registrarEventoGoogleSheets({
+      tipo: 'mensagem_texto',
+      email: profileEmail,
+      nome: profile.nome,
+      perfil: profile.role,
+      profile_id: profileId,
+      mensagem: texto,
+      destino: 'admin',
+    })
+
+    setMensagemAdmin('')
+    setStatusMensagemAdmin('Mensagem enviada para o Admin e registrada no Google Sheets.')
+    window.setTimeout(() => setEnviandoMensagemAdmin(false), 500)
   }
 
   function categoriaDoMaterial(material: MaterialInformativo) {
@@ -803,6 +834,37 @@ export default function PainelProfissional() {
             </div>
           )}
         </div>
+        <div id="painel-mensagem-admin" className="glass-sm message-panel" style={{ padding: 24, marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 14 }}>
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Mensagem para o Admin</h3>
+              <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)' }}>
+                Envie uma observação, dúvida ou alinhamento. A mensagem ficará registrada na aba Mensagens do Google Sheets.
+              </p>
+            </div>
+            <span className="message-panel-badge">Registro no Sheets</span>
+          </div>
+          <form onSubmit={enviarMensagemAdmin} className="message-form">
+            <textarea
+              className="input-field message-textarea"
+              value={mensagemAdmin}
+              onChange={event => setMensagemAdmin(event.target.value)}
+              maxLength={600}
+              placeholder="Escreva sua mensagem para o Admin..."
+            />
+            <div className="message-form-footer">
+              <span>{mensagemAdmin.length}/600</span>
+              <button type="submit" className="btn-primary" disabled={enviandoMensagemAdmin || mensagemAdmin.trim().length < 5}>
+                {enviandoMensagemAdmin ? 'Enviando...' : 'Enviar mensagem'}
+              </button>
+            </div>
+          </form>
+          {statusMensagemAdmin && (
+            <div className="message-panel-status">
+              {statusMensagemAdmin}
+            </div>
+          )}
+        </div>
         <div id="painel-senha">
           <AlterarSenhaCard />
         </div>
@@ -812,6 +874,7 @@ export default function PainelProfissional() {
         <a href="#painel-resumo">Painel</a>
         <a href="#painel-metas">Metas</a>
         <a href="#painel-materiais">Materiais</a>
+        <a href="#painel-mensagem-admin">Mensagem</a>
         <a href="#painel-senha">Senha</a>
       </nav>
 
