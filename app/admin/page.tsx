@@ -164,6 +164,9 @@ export default function AdminPage() {
       .then(linhasGoogle => {
         const resumoGoogle = compatibilizarLeiturasGoogleSheets(profs ?? [], mats ?? [], linhasGoogle)
         setResumoLeiturasGoogle(resumoGoogle)
+        setErroMaterial(erroAtual =>
+          erroAtual.includes('contagem de aceites') ? '' : erroAtual,
+        )
         setLeiturasMateriais(prev => {
           const leiturasAtualizadas = new Map<string, MaterialLeitura>()
           ;[...prev, ...resumoGoogle.leituras].forEach(leitura => {

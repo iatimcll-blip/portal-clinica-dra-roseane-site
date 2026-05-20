@@ -15,7 +15,8 @@ import {
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes, MaterialInformativo, MaterialLeitura } from '@/lib/types'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
-import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
+import { buscarLeiturasMateriaisGoogleSheets, registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
+import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
 
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
@@ -100,7 +101,7 @@ export default function PainelProfissional() {
   const [youtubeMuted, setYoutubeMuted] = useState(true)
   const [loading, setLoading] = useState(true)
 
-  const carregar = useCallback(async (mes: string, uid: string) => {
+  const carregar = useCallback(async (mes: string, uid: string, currentProfile: Profile) => {
     if (DEMO_MODE) {
       const mesNum = mesNumero(mes)
       const cfg = getDemoConfig(mesNum)
@@ -193,7 +194,26 @@ export default function PainelProfissional() {
       acc[leitura.material_id] = leitura.read_at
       return acc
     }, {})
-    setLeiturasMateriais({ ...leiturasDoBanco, ...carregarLeiturasLocais(uid) })
+    let leiturasCombinadas = { ...leiturasDoBanco, ...carregarLeiturasLocais(uid) }
+
+    try {
+      const leiturasGoogle = await buscarLeiturasMateriaisGoogleSheets()
+      if (leiturasGoogle.length > 0) {
+        const resumo = compatibilizarLeiturasGoogleSheets([currentProfile], materiaisData ?? [], leiturasGoogle)
+        const leiturasDoSheets = resumo.leituras.reduce<Record<number, string>>((acc, leitura) => {
+          if (leitura.profile_id === uid) {
+            acc[leitura.material_id] = leitura.read_at
+          }
+          return acc
+        }, {})
+
+        leiturasCombinadas = { ...leiturasCombinadas, ...leiturasDoSheets }
+      }
+    } catch {
+      // Se o espelho do Sheets estiver indisponivel, mantemos Supabase/localStorage.
+    }
+
+    setLeiturasMateriais(leiturasCombinadas)
     setErroMateriais(materiaisError ? 'Materiais informativos ainda não configurados no Supabase.' : '')
   }, [])
 
@@ -221,12 +241,12 @@ export default function PainelProfissional() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!profileId) return
+    if (!profileId || !profile) return
     queueMicrotask(() => {
       setLoading(true)
-      carregar(mesSelecionado, profileId).then(() => setLoading(false))
+      carregar(mesSelecionado, profileId, profile).then(() => setLoading(false))
     })
-  }, [mesSelecionado, profileId, carregar])
+  }, [mesSelecionado, profileId, profile, carregar])
 
   useEffect(() => {
     const indice = Math.floor(Math.random() * FRASES_MOTIVACIONAIS.length)
