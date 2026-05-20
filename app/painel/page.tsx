@@ -701,15 +701,21 @@ export default function PainelProfissional() {
                         >
                           {isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
                         </button>
+                        {lidoEm ? (
+                          <div className="material-read-confirmed">
+                            Termo já assinado em {new Date(lidoEm).toLocaleDateString('pt-BR')}
+                          </div>
+                        ) : (
                         <button
                           type="button"
                           onClick={() => confirmarLeitura(material)}
-                          disabled={Boolean(lidoEm) || !podeConfirmarCiencia}
+                          disabled={!podeConfirmarCiencia}
                           className="material-read-button"
                           title={!lidoEm && !podeConfirmarCiencia ? 'Leia o material até a última página para habilitar a ciência.' : undefined}
                         >
-                          {lidoEm ? `Ciente em ${new Date(lidoEm).toLocaleDateString('pt-BR')}` : 'Li e estou ciente'}
+                          Li e estou ciente
                         </button>
+                        )}
                         {!lidoEm && !podeConfirmarCiencia && isPdfMaterial(material) && (
                           <div style={{ flexBasis: '100%', fontSize: 11, color: 'rgba(240,230,255,0.45)' }}>
                             O botão será liberado ao chegar na última página.

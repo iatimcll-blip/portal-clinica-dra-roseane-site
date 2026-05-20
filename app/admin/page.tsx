@@ -28,6 +28,25 @@ const LIMITE_MATERIAL_BYTES = 50 * 1024 * 1024
 const EXTENSOES_MATERIAIS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'csv', 'mp4', 'mov', 'zip']
 const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos']
 
+function chaveLeiturasLocais(profileId: string) {
+  return `leituras_materiais_${profileId}`
+}
+
+function carregarLeiturasLocais(profileId: string) {
+  if (typeof window === 'undefined') return {}
+  try {
+    return JSON.parse(localStorage.getItem(chaveLeiturasLocais(profileId)) ?? '{}') as Record<number, string>
+  } catch {
+    return {}
+  }
+}
+
+function salvarLeituraLocal(profileId: string, materialId: number, readAt: string) {
+  if (typeof window === 'undefined') return
+  const leituras = carregarLeiturasLocais(profileId)
+  localStorage.setItem(chaveLeiturasLocais(profileId), JSON.stringify({ ...leituras, [materialId]: leituras[materialId] ?? readAt }))
+}
+
 export default function AdminPage() {
   const router = useRouter()
   const [mesSelecionado, setMesSelecionado] = useState(MESES_LISTA[new Date().getMonth()])
@@ -121,7 +140,17 @@ export default function AdminPage() {
       supabase.from('auditoria_eventos').select('*').order('created_at', { ascending: false }).limit(5),
     ])
 
-    setLeiturasMateriais(leiturasResult.status === 'fulfilled' ? (leiturasResult.value.data ?? []) : [])
+    const leiturasBanco = leiturasResult.status === 'fulfilled' ? ((leiturasResult.value.data ?? []) as MaterialLeitura[]) : []
+    const leiturasLocais = Object.entries(carregarLeiturasLocais(user.id)).map(([materialId, readAt]) => ({
+      material_id: Number(materialId),
+      profile_id: user.id,
+      read_at: readAt,
+    }))
+    const leiturasUnicas = new Map<string, MaterialLeitura>()
+    ;[...leiturasBanco, ...leiturasLocais].forEach(leitura => {
+      leiturasUnicas.set(`${leitura.profile_id}:${leitura.material_id}`, leitura)
+    })
+    setLeiturasMateriais(Array.from(leiturasUnicas.values()))
     setEventosAuditoria(auditoriaResult.status === 'fulfilled' ? (auditoriaResult.value.data ?? []) : [])
     setLoading(false)
   }, [mesNum, router])
@@ -324,9 +353,14 @@ export default function AdminPage() {
 
   async function confirmarLeituraGestao(material: MaterialInformativo) {
     if (!profileIdAtual) return
+    if (leiturasGestao[material.id]) {
+      setErroMaterial(`Termo já assinado para "${material.titulo}". Não é necessário assinar novamente.`)
+      return
+    }
 
     const agora = new Date().toISOString()
     const supabase = createClient()
+    salvarLeituraLocal(profileIdAtual, material.id, agora)
     setLeiturasMateriais(prev => {
       const outrasLeituras = prev.filter(leitura => !(leitura.material_id === material.id && leitura.profile_id === profileIdAtual))
       return [...outrasLeituras, { material_id: material.id, profile_id: profileIdAtual, read_at: agora }]
@@ -619,14 +653,19 @@ export default function AdminPage() {
                               >
                                 {isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => confirmarLeituraGestao(material)}
-                                disabled={Boolean(lidoEm)}
-                                className="material-read-button"
-                              >
-                                {lidoEm ? `Ciente em ${new Date(lidoEm).toLocaleDateString('pt-BR')}` : 'Li e estou ciente'}
-                              </button>
+                              {lidoEm ? (
+                                <div className="material-read-confirmed">
+                                  Termo já assinado em {new Date(lidoEm).toLocaleDateString('pt-BR')}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => confirmarLeituraGestao(material)}
+                                  className="material-read-button"
+                                >
+                                  Li e estou ciente
+                                </button>
+                              )}
                             </div>
                           </div>
                           )
