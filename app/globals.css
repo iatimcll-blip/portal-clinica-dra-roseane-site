@@ -266,6 +266,83 @@ body {
   font-weight: 800;
 }
 
+.executive-card {
+  position: relative;
+  overflow: visible;
+}
+
+.executive-card:hover,
+.executive-card:focus-within {
+  z-index: 45;
+}
+
+.awareness-popover-trigger {
+  width: fit-content;
+  margin-top: 10px;
+  border: 1px solid rgba(56,189,248,0.26);
+  background: rgba(56,189,248,0.1);
+  color: #7dd3fc;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: default;
+  outline: none;
+}
+
+.awareness-popover {
+  position: absolute;
+  right: 12px;
+  top: calc(100% - 8px);
+  z-index: 30;
+  width: min(360px, calc(100vw - 48px));
+  display: none;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(18,7,29,0.98);
+  box-shadow: 0 22px 60px rgba(0,0,0,0.46);
+  border-radius: 14px;
+  padding: 14px;
+  color: #f0e6ff;
+  max-height: min(420px, 70vh);
+  overflow: auto;
+}
+
+.awareness-popover-trigger:hover .awareness-popover,
+.awareness-popover-trigger:focus .awareness-popover,
+.awareness-popover-trigger:focus-within .awareness-popover {
+  display: grid;
+}
+
+.awareness-popover-title {
+  color: #86efac;
+  font-size: 11px;
+  font-weight: 900;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.awareness-popover-title.pending {
+  color: #facc15;
+}
+
+.awareness-popover ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.awareness-popover li,
+.awareness-popover p {
+  color: rgba(240,230,255,0.72);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0;
+}
+
 .mobile-bottom-nav {
   display: none;
 }
@@ -673,6 +750,12 @@ body {
 }
 
 @media (max-width: 480px) {
+  .awareness-popover {
+    left: 0;
+    right: auto;
+    grid-template-columns: 1fr;
+  }
+
   .app-main {
     padding: 14px 10px 24px !important;
   }

@@ -459,9 +459,13 @@ export default function AdminPage() {
   )
   const totalLeituras = assinaturasUnicas.size
   const totalLeiturasPossiveis = materiaisObrigatorios.length * profiles.length
-  const profissionaisComCienciaCompleta = profiles.filter(profile =>
+  const profissionaisComCienciaCompletaLista = profiles.filter(profile =>
     materiaisObrigatorios.length > 0 && materiaisObrigatorios.every(material => assinaturasUnicas.has(`${profile.id}:${material.id}`)),
-  ).length
+  )
+  const profissionaisPendentesCienciaLista = profiles.filter(profile =>
+    materiaisObrigatorios.length > 0 && !materiaisObrigatorios.every(material => assinaturasUnicas.has(`${profile.id}:${material.id}`)),
+  )
+  const profissionaisComCienciaCompleta = profissionaisComCienciaCompletaLista.length
   const podeEditar = perfilAdmin === 'admin'
   const materiaisVisiveisGestao = materiais.filter(material => material.ativo)
   const leiturasGestao = leiturasMateriais.reduce<Record<number, string>>((acc, leitura) => {
@@ -573,6 +577,33 @@ export default function AdminPage() {
                   <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 8 }}>{c.label}</div>
                   <div style={{ fontSize: 24, fontWeight: 800, color: c.cor, marginBottom: 2 }}>{c.valor}</div>
                   <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)' }}>{c.apoio}</div>
+                  {c.label === 'Profissionais cientes' && (
+                    <div className="awareness-popover-trigger" tabIndex={0} aria-label="Ver profissionais cientes e pendentes">
+                      Ver nomes
+                      <div className="awareness-popover">
+                        <div>
+                          <div className="awareness-popover-title">Assinaram</div>
+                          {profissionaisComCienciaCompletaLista.length > 0 ? (
+                            <ul>
+                              {profissionaisComCienciaCompletaLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
+                            </ul>
+                          ) : (
+                            <p>Nenhuma profissional assinou ainda.</p>
+                          )}
+                        </div>
+                        <div>
+                          <div className="awareness-popover-title pending">Faltam assinar</div>
+                          {profissionaisPendentesCienciaLista.length > 0 ? (
+                            <ul>
+                              {profissionaisPendentesCienciaLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
+                            </ul>
+                          ) : (
+                            <p>Todas as profissionais assinaram.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
