@@ -308,10 +308,16 @@ export default function PainelProfissional() {
 
   async function confirmarLeitura(material: MaterialInformativo) {
     if (!profileId || !profile) return
+    if (leiturasMateriais[material.id]) {
+      setErroMateriais(`Termo já assinado para "${material.titulo}". Não é necessário assinar novamente.`)
+      return
+    }
+
     if (DEMO_MODE) {
       const agoraDemo = new Date().toISOString()
       salvarLeituraLocal(profileId, material.id, agoraDemo)
       setLeiturasMateriais(prev => ({ ...prev, [material.id]: agoraDemo }))
+      setErroMateriais('')
       return
     }
 
@@ -472,9 +478,9 @@ export default function PainelProfissional() {
 
         {!podeVisualizarDados && (
           <div className="glass-sm" style={{ padding: 24, marginBottom: 24, border: '1px solid rgba(250,204,21,0.22)', background: 'rgba(250,204,21,0.06)' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, color: '#facc15' }}>Materiais pendentes de ciência</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, color: '#facc15' }}>Atenção: materiais pendentes de ciência</h2>
             <p style={{ color: 'rgba(240,230,255,0.72)', fontSize: 14, lineHeight: 1.6 }}>
-              Para visualizar seus valores, metas e indicadores, leia todos os materiais informativos pendentes até a última página e clique em <strong>Li e estou ciente</strong>.
+              Seus dados, valores, metas e indicadores serão liberados após a assinatura do termo de ciência. Leia todos os materiais informativos pendentes até a última página e clique em <strong>Li e estou ciente</strong>.
             </p>
             <div style={{ color: 'rgba(240,230,255,0.5)', fontSize: 12, marginTop: 10 }}>
               Pendentes: {materiaisPendentesCiencia.length} de {materiaisPdf.length}

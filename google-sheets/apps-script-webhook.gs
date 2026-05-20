@@ -35,6 +35,7 @@ function doPost(e) {
         'Origem',
         'Navegador',
       ])
+      prepararColunaDataHora_(sheet)
 
       sheet.appendRow([
         formatarDataHoraBrasil_(payload.registrado_em),
@@ -52,11 +53,22 @@ function doPost(e) {
     if (payload.tipo === 'leitura_material') {
       const linhaLeitura = criarLinhaLeitura_(payload)
       const sheet = getOrCreateSheet_(ss, ABA_LEITURAS, CABECALHO_LEITURAS)
-      sheet.appendRow(linhaLeitura)
 
       const nomeAbaMaterial = criarNomeAbaMaterial_(payload)
       const sheetMaterial = getOrCreateSheet_(ss, nomeAbaMaterial, CABECALHO_LEITURAS)
-      sheetMaterial.appendRow(linhaLeitura)
+      prepararColunaDataHora_(sheet)
+      prepararColunaDataHora_(sheetMaterial)
+
+      if (termoJaAssinado_(sheet, payload)) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ ok: true, status: 'termo_ja_assinado' }))
+          .setMimeType(ContentService.MimeType.JSON)
+      }
+
+      sheet.appendRow(linhaLeitura)
+      if (!termoJaAssinado_(sheetMaterial, payload)) {
+        sheetMaterial.appendRow(linhaLeitura)
+      }
     }
 
     return ContentService
@@ -95,6 +107,21 @@ function formatarDataHoraBrasil_(valor) {
   }
 
   return Utilities.formatDate(data, 'America/Fortaleza', 'dd/MM/yyyy HH:mm:ss')
+}
+
+function prepararColunaDataHora_(sheet) {
+  sheet.getRange('A:A').setNumberFormat('@')
+}
+
+function termoJaAssinado_(sheet, payload) {
+  const lastRow = sheet.getLastRow()
+  if (lastRow < 2) return false
+
+  const registros = sheet.getRange(2, 5, lastRow - 1, 2).getValues()
+  const profileId = String(payload.profile_id || '')
+  const materialId = String(payload.material_id || '')
+
+  return registros.some(row => String(row[0] || '') === profileId && String(row[1] || '') === materialId)
 }
 
 function criarNomeAbaMaterial_(payload) {

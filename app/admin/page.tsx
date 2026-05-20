@@ -383,8 +383,19 @@ export default function AdminPage() {
   const mediaFeedback = notasFeedback.length > 0 ? notasFeedback.reduce((s, nota) => s + nota, 0) / notasFeedback.length : 0
   const abaixoDoGatilho = rankingMensal.filter(p => p.realizado < cfg.meta_gatilho).length
   const pertoDaMeta = rankingMensal.filter(p => p.pctMeta >= 80 && p.pctMeta < 100).length
-  const totalLeituras = leiturasMateriais.length
-  const totalLeiturasPossiveis = materiais.length * profiles.length
+  const materiaisObrigatorios = materiais.filter(material => material.ativo && isPdfMaterial(material))
+  const idsProfissionais = new Set(profiles.map(profile => profile.id))
+  const idsMateriaisObrigatorios = new Set(materiaisObrigatorios.map(material => material.id))
+  const assinaturasUnicas = new Set(
+    leiturasMateriais
+      .filter(leitura => idsProfissionais.has(leitura.profile_id) && idsMateriaisObrigatorios.has(leitura.material_id))
+      .map(leitura => `${leitura.profile_id}:${leitura.material_id}`),
+  )
+  const totalLeituras = assinaturasUnicas.size
+  const totalLeiturasPossiveis = materiaisObrigatorios.length * profiles.length
+  const profissionaisComCienciaCompleta = profiles.filter(profile =>
+    materiaisObrigatorios.length > 0 && materiaisObrigatorios.every(material => assinaturasUnicas.has(`${profile.id}:${material.id}`)),
+  ).length
   const podeEditar = perfilAdmin === 'admin'
   const materiaisVisiveisGestao = materiais.filter(material => material.ativo)
   const leiturasGestao = leiturasMateriais.reduce<Record<number, string>>((acc, leitura) => {
@@ -404,7 +415,11 @@ export default function AdminPage() {
   }
 
   function totalLeiturasMaterial(materialId: number) {
-    return leiturasMateriais.filter(leitura => leitura.material_id === materialId).length
+    return new Set(
+      leiturasMateriais
+        .filter(leitura => leitura.material_id === materialId && idsProfissionais.has(leitura.profile_id))
+        .map(leitura => leitura.profile_id),
+    ).size
   }
 
   return (
@@ -486,7 +501,7 @@ export default function AdminPage() {
                 { label: 'Abaixo do gatilho', valor: `${abaixoDoGatilho}`, apoio: 'profissionais', cor: abaixoDoGatilho === 0 ? '#4ade80' : '#f87171' },
                 { label: 'Perto da meta', valor: `${pertoDaMeta}`, apoio: 'acima de 80%', cor: '#facc15' },
                 { label: 'Feedback medio', valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem notas', apoio: 'mes selecionado', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
-                { label: 'Materiais lidos', valor: totalLeiturasPossiveis > 0 ? `${totalLeituras}/${totalLeiturasPossiveis}` : '0/0', apoio: 'confirmacoes', cor: '#38bdf8' },
+                { label: 'Profissionais cientes', valor: totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : '0/0', apoio: `${totalLeituras}/${totalLeiturasPossiveis} assinaturas`, cor: '#38bdf8' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm executive-card" style={{ padding: 18 }}>
                   <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 8 }}>{c.label}</div>
