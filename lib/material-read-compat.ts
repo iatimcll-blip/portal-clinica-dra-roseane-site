@@ -69,6 +69,26 @@ function encontrarMaterialPorTitulo(materiais: MaterialInformativo[], titulo: st
   })
 }
 
+function encontrarMaterialPorIdOuTitulo(materiais: MaterialInformativo[], materialId?: number | string, titulo?: string) {
+  const idNumerico = Number(materialId)
+  if (Number.isFinite(idNumerico)) {
+    const porId = materiais.find(material => material.id === idNumerico)
+    if (porId) return porId
+  }
+
+  return encontrarMaterialPorTitulo(materiais, titulo ?? '')
+}
+
+function encontrarProfilePorIdOuNome(profiles: Profile[], profissionaisPorNome: Map<string, Profile>, profileId?: string, nome?: string) {
+  const id = String(profileId ?? '').trim()
+  if (id) {
+    const porId = profiles.find(profile => profile.id === id)
+    if (porId) return porId
+  }
+
+  return profissionaisPorNome.get(normalizarChave(nome))
+}
+
 export function compatibilizarLeiturasGoogleSheets(
   profiles: Profile[],
   materiais: MaterialInformativo[],
@@ -88,8 +108,8 @@ export function compatibilizarLeiturasGoogleSheets(
       unicasGoogle.set(chaveGoogle, leitura)
     }
 
-    const profile = profissionaisPorNome.get(nome)
-    const material = encontrarMaterialPorTitulo(materiais, leitura.material_titulo ?? '')
+    const profile = encontrarProfilePorIdOuNome(profiles, profissionaisPorNome, leitura.profile_id, leitura.nome)
+    const material = encontrarMaterialPorIdOuTitulo(materiais, leitura.material_id, leitura.material_titulo)
     if (!profile || !material) return
 
     const chaveLeitura = `${profile.id}:${material.id}`
