@@ -1,6 +1,7 @@
-const ABA_ACESSOS = 'Acessos'
-const ABA_LEITURAS = 'Leituras de Materiais'
-const CABECALHO_LEITURAS = [
+var ABA_ACESSOS = 'Acessos'
+var ABA_LEITURAS = 'Leituras de Materiais'
+
+var CABECALHO_LEITURAS = [
   'Registrado em',
   'E-mail',
   'Nome',
@@ -16,15 +17,15 @@ const CABECALHO_LEITURAS = [
 ]
 
 function doPost(e) {
-  const lock = LockService.getScriptLock()
+  var lock = LockService.getScriptLock()
   lock.waitLock(10000)
 
   try {
-    const payload = JSON.parse(e.postData.contents)
-    const ss = SpreadsheetApp.getActiveSpreadsheet()
+    var payload = JSON.parse(e.postData.contents)
+    var ss = SpreadsheetApp.getActiveSpreadsheet()
 
     if (payload.tipo === 'acesso') {
-      const sheet = getOrCreateSheet_(ss, ABA_ACESSOS, [
+      var sheetAcessos = getOrCreateSheet_(ss, ABA_ACESSOS, [
         'Registrado em',
         'E-mail',
         'Nome',
@@ -35,9 +36,9 @@ function doPost(e) {
         'Origem',
         'Navegador',
       ])
-      prepararColunaDataHora_(sheet)
 
-      sheet.appendRow([
+      prepararColunaDataHora_(sheetAcessos)
+      sheetAcessos.appendRow([
         formatarDataHoraBrasil_(payload.registrado_em),
         payload.email || '',
         payload.nome || '',
@@ -51,21 +52,22 @@ function doPost(e) {
     }
 
     if (payload.tipo === 'leitura_material') {
-      const linhaLeitura = criarLinhaLeitura_(payload)
-      const sheet = getOrCreateSheet_(ss, ABA_LEITURAS, CABECALHO_LEITURAS)
+      var linhaLeitura = criarLinhaLeitura_(payload)
+      var sheetLeituras = getOrCreateSheet_(ss, ABA_LEITURAS, CABECALHO_LEITURAS)
+      var nomeAbaMaterial = criarNomeAbaMaterial_(payload)
+      var sheetMaterial = getOrCreateSheet_(ss, nomeAbaMaterial, CABECALHO_LEITURAS)
 
-      const nomeAbaMaterial = criarNomeAbaMaterial_(payload)
-      const sheetMaterial = getOrCreateSheet_(ss, nomeAbaMaterial, CABECALHO_LEITURAS)
-      prepararColunaDataHora_(sheet)
+      prepararColunaDataHora_(sheetLeituras)
       prepararColunaDataHora_(sheetMaterial)
 
-      if (termoJaAssinado_(sheet, payload)) {
+      if (termoJaAssinado_(sheetLeituras, payload)) {
         return ContentService
           .createTextOutput(JSON.stringify({ ok: true, status: 'termo_ja_assinado' }))
           .setMimeType(ContentService.MimeType.JSON)
       }
 
-      sheet.appendRow(linhaLeitura)
+      sheetLeituras.appendRow(linhaLeitura)
+
       if (!termoJaAssinado_(sheetMaterial, payload)) {
         sheetMaterial.appendRow(linhaLeitura)
       }
@@ -81,6 +83,51 @@ function doPost(e) {
   } finally {
     lock.releaseLock()
   }
+}
+
+function testarAcesso() {
+  var e = {
+    postData: {
+      contents: JSON.stringify({
+        tipo: 'acesso',
+        registrado_em: new Date().toISOString(),
+        email: 'gestao@clinica.com',
+        nome: 'Gestão',
+        perfil: 'gestao',
+        profile_id: 'teste-gestao',
+        destino: '/admin',
+        pagina: '/login',
+        origem: 'teste-manual',
+        user_agent: 'Apps Script',
+      }),
+    },
+  }
+
+  return doPost(e)
+}
+
+function testarLeituraMaterial() {
+  var e = {
+    postData: {
+      contents: JSON.stringify({
+        tipo: 'leitura_material',
+        registrado_em: new Date().toISOString(),
+        email: 'tayane@clinica.com',
+        nome: 'Tayane Borges De Sousa',
+        perfil: 'user',
+        profile_id: 'teste-tayane',
+        material_id: 999001,
+        material_titulo: 'Teste de Ciência Codex',
+        material_arquivo: 'teste-ciencia-codex.pdf',
+        material_categoria: 'Comunicados',
+        pagina: '/painel',
+        origem: 'teste-manual',
+        user_agent: 'Apps Script',
+      }),
+    },
+  }
+
+  return doPost(e)
 }
 
 function criarLinhaLeitura_(payload) {
@@ -101,7 +148,8 @@ function criarLinhaLeitura_(payload) {
 }
 
 function formatarDataHoraBrasil_(valor) {
-  const data = valor ? new Date(valor) : new Date()
+  var data = valor ? new Date(valor) : new Date()
+
   if (isNaN(data.getTime())) {
     return Utilities.formatDate(new Date(), 'America/Fortaleza', 'dd/MM/yyyy HH:mm:ss')
   }
@@ -114,33 +162,38 @@ function prepararColunaDataHora_(sheet) {
 }
 
 function termoJaAssinado_(sheet, payload) {
-  const lastRow = sheet.getLastRow()
+  var lastRow = sheet.getLastRow()
   if (lastRow < 2) return false
 
-  const registros = sheet.getRange(2, 5, lastRow - 1, 2).getValues()
-  const profileId = String(payload.profile_id || '')
-  const materialId = String(payload.material_id || '')
+  var registros = sheet.getRange(2, 5, lastRow - 1, 2).getValues()
+  var profileId = String(payload.profile_id || '')
+  var materialId = String(payload.material_id || '')
 
-  return registros.some(row => String(row[0] || '') === profileId && String(row[1] || '') === materialId)
+  return registros.some(function(row) {
+    return String(row[0] || '') === profileId && String(row[1] || '') === materialId
+  })
 }
 
 function criarNomeAbaMaterial_(payload) {
-  const base = payload.material_titulo || payload.material_arquivo || `Material ${payload.material_id || ''}`
-  const limpo = String(base)
+  var base = payload.material_titulo || payload.material_arquivo || ('Material ' + (payload.material_id || ''))
+  var limpo = String(base)
     .replace(/[\[\]\:\*\?\/\\]/g, '-')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 85)
 
-  return `Ciência - ${limpo || 'Material'}`
+  return 'Ciência - ' + (limpo || 'Material')
 }
 
 function getOrCreateSheet_(ss, name, headers) {
-  let sheet = ss.getSheetByName(name)
+  var sheet = ss.getSheetByName(name)
   if (!sheet) sheet = ss.insertSheet(name)
 
-  const currentHeaders = sheet.getRange(1, 1, 1, headers.length).getValues()[0]
-  const needsHeaders = currentHeaders.every(value => value === '')
+  var currentHeaders = sheet.getRange(1, 1, 1, headers.length).getValues()[0]
+  var needsHeaders = currentHeaders.every(function(value) {
+    return value === ''
+  })
+
   if (needsHeaders) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers])
     sheet.setFrozenRows(1)
