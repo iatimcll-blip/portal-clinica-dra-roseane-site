@@ -16,6 +16,25 @@ var CABECALHO_LEITURAS = [
   'Navegador',
 ]
 
+function doGet(e) {
+  try {
+    var tipo = e && e.parameter ? e.parameter.tipo : ''
+    var callback = e && e.parameter ? e.parameter.callback : ''
+
+    if (tipo !== 'leituras_materiais') {
+      return responderJson_({ ok: false, error: 'Tipo de consulta invalido.' }, callback)
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet()
+    var sheetLeituras = getOrCreateSheet_(ss, ABA_LEITURAS, CABECALHO_LEITURAS)
+    var data = listarLeiturasMateriaisUnicas_(sheetLeituras)
+
+    return responderJson_({ ok: true, data: data }, callback)
+  } catch (error) {
+    return responderJson_({ ok: false, error: String(error) }, e && e.parameter ? e.parameter.callback : '')
+  }
+}
+
 function doPost(e) {
   var lock = LockService.getScriptLock()
   lock.waitLock(10000)
@@ -83,6 +102,57 @@ function doPost(e) {
   } finally {
     lock.releaseLock()
   }
+}
+
+function listarLeiturasMateriaisUnicas_(sheet) {
+  var lastRow = sheet.getLastRow()
+  if (lastRow < 2) return []
+
+  var rows = sheet.getRange(2, 1, lastRow - 1, CABECALHO_LEITURAS.length).getValues()
+  var mapa = {}
+  var saida = []
+
+  rows.forEach(function(row) {
+    var nome = normalizarChave_(row[2])
+    var titulo = normalizarChave_(row[6])
+    if (!nome || !titulo) return
+
+    var chave = nome + ':' + titulo
+    if (mapa[chave]) return
+    mapa[chave] = true
+
+    saida.push({
+      registrado_em: String(row[0] || ''),
+      email: String(row[1] || ''),
+      nome: String(row[2] || ''),
+      perfil: String(row[3] || ''),
+      profile_id: String(row[4] || ''),
+      material_id: String(row[5] || ''),
+      material_titulo: String(row[6] || ''),
+      material_arquivo: String(row[7] || ''),
+      categoria: String(row[8] || ''),
+    })
+  })
+
+  return saida
+}
+
+function normalizarChave_(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function responderJson_(payload, callback) {
+  var body = JSON.stringify(payload)
+  var output = callback
+    ? ContentService.createTextOutput(String(callback).replace(/[^\w.$]/g, '') + '(' + body + ');')
+    : ContentService.createTextOutput(body)
+
+  return output.setMimeType(callback ? ContentService.MimeType.JAVASCRIPT : ContentService.MimeType.JSON)
 }
 
 function testarAcesso() {

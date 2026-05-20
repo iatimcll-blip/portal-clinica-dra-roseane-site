@@ -16,7 +16,8 @@ import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
-import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
+import { buscarLeiturasMateriaisGoogleSheets, registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
+import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
 
 type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
 type PerfilAdmin = 'admin' | 'gestao'
@@ -57,6 +58,7 @@ export default function AdminPage() {
   const [todosResultados, setTodosResultados] = useState<Resultado[]>([])
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
   const [leiturasMateriais, setLeiturasMateriais] = useState<MaterialLeitura[]>([])
+  const [resumoLeiturasGoogle, setResumoLeiturasGoogle] = useState<CompatibilizacaoLeituras | null>(null)
   const [eventosAuditoria, setEventosAuditoria] = useState<AuditoriaEvento[]>([])
   const [tituloMaterial, setTituloMaterial] = useState('')
   const [descricaoMaterial, setDescricaoMaterial] = useState('')
@@ -88,6 +90,7 @@ export default function AdminPage() {
       setTodosResultados(getDemoResultadosAnual(12))
       setMateriais([])
       setLeiturasMateriais([])
+      setResumoLeiturasGoogle(null)
       setEventosAuditoria([])
       setPerfilAdmin('admin')
       setProfileIdAtual('')
@@ -156,6 +159,22 @@ export default function AdminPage() {
     setLeiturasMateriais(Array.from(leiturasUnicas.values()))
     setEventosAuditoria(auditoriaResult.status === 'fulfilled' ? (auditoriaResult.value.data ?? []) : [])
     setLoading(false)
+
+    buscarLeiturasMateriaisGoogleSheets()
+      .then(linhasGoogle => {
+        const resumoGoogle = compatibilizarLeiturasGoogleSheets(profs ?? [], mats ?? [], linhasGoogle)
+        setResumoLeiturasGoogle(resumoGoogle)
+        setLeiturasMateriais(prev => {
+          const leiturasAtualizadas = new Map<string, MaterialLeitura>()
+          ;[...prev, ...resumoGoogle.leituras].forEach(leitura => {
+            leiturasAtualizadas.set(`${leitura.profile_id}:${leitura.material_id}`, leitura)
+          })
+          return Array.from(leiturasAtualizadas.values())
+        })
+      })
+      .catch(() => {
+        setResumoLeiturasGoogle(null)
+      })
   }, [mesNum, router])
 
   useEffect(() => { queueMicrotask(() => { carregarDados() }) }, [carregarDados])
@@ -548,7 +567,7 @@ export default function AdminPage() {
                 { label: 'Abaixo do gatilho', valor: `${abaixoDoGatilho}`, apoio: 'profissionais', cor: abaixoDoGatilho === 0 ? '#4ade80' : '#f87171' },
                 { label: 'Perto da meta', valor: `${pertoDaMeta}`, apoio: 'acima de 80%', cor: '#facc15' },
                 { label: 'Feedback medio', valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem notas', apoio: 'mes selecionado', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
-                { label: 'Profissionais cientes', valor: totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : '0/0', apoio: `${totalLeituras}/${totalLeiturasPossiveis} assinaturas`, cor: '#38bdf8' },
+                { label: 'Profissionais cientes', valor: totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : '0/0', apoio: `${totalLeituras}/${totalLeiturasPossiveis} assinaturas${resumoLeiturasGoogle ? ` · Sheets ${resumoLeiturasGoogle.totalCompatibilizado}` : ''}`, cor: '#38bdf8' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm executive-card" style={{ padding: 18 }}>
                   <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 8 }}>{c.label}</div>
