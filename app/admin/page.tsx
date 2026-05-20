@@ -141,6 +141,9 @@ export default function AdminPage() {
     ])
 
     const leiturasBanco = leiturasResult.status === 'fulfilled' ? ((leiturasResult.value.data ?? []) as MaterialLeitura[]) : []
+    if (leiturasResult.status === 'fulfilled' && leiturasResult.value.error) {
+      setErroMaterial(mensagemErroLeituras(leiturasResult.value.error.message, leiturasResult.value.error.code))
+    }
     const leiturasLocais = Object.entries(carregarLeiturasLocais(user.id)).map(([materialId, readAt]) => ({
       material_id: Number(materialId),
       profile_id: user.id,
@@ -204,6 +207,16 @@ export default function AdminPage() {
       return 'O Supabase bloqueou a ação pelas regras de acesso. Reaplique o arquivo supabase/fix_materiais_informativos.sql no SQL Editor.'
     }
     return 'Não foi possível acessar os materiais informativos agora.'
+  }
+
+  function mensagemErroLeituras(message?: string, code?: string) {
+    if (code === 'PGRST205' || message?.toLowerCase().includes('materiais_leituras')) {
+      return 'A contagem de aceites ainda nao esta ativa no Supabase. Execute o arquivo supabase/fix_materiais_leituras_persistencia.sql no SQL Editor.'
+    }
+    if (message?.toLowerCase().includes('row-level security')) {
+      return 'O Supabase bloqueou a leitura dos aceites pelas regras de acesso. Reaplique o arquivo supabase/fix_materiais_leituras_persistencia.sql no SQL Editor.'
+    }
+    return 'Nao foi possivel carregar a contagem de aceites agora.'
   }
 
   function validarArquivoMaterial(arquivo: File) {
