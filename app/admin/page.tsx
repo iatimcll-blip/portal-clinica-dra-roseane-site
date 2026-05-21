@@ -18,6 +18,13 @@ import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
 import { buscarLeiturasMateriaisGoogleSheets, buscarMensagensGoogleSheets, enviarMensagemGoogleSheets, registrarEventoGoogleSheets, type GoogleSheetsMessageRow } from '@/lib/google-sheets-sync'
 import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
+import {
+  CATEGORIA_FOLHA_PONTO_D1,
+  encontrarFolhaDoProfissional,
+  extrairFolhasPontoD1DePdf,
+  isFolhaPontoD1,
+  type FolhaPontoD1,
+} from '@/lib/ponto-d1'
 
 type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
 type PerfilAdmin = 'admin' | 'gestao'
@@ -28,7 +35,7 @@ const YOUTUBE_UPLOADS_PLAYLIST_ID = 'UUomJ8VZUli9JIv2Cgpzf_DQ'
 const YOUTUBE_PLAYLIST_LIMIT = 50
 const LIMITE_MATERIAL_BYTES = 50 * 1024 * 1024
 const EXTENSOES_MATERIAIS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'csv', 'mp4', 'mov', 'zip']
-const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos']
+const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos', CATEGORIA_FOLHA_PONTO_D1]
 
 function chaveLeiturasLocais(profileId: string) {
   return `leituras_materiais_${profileId}`
@@ -78,6 +85,8 @@ export default function AdminPage() {
   const [youtubeVideoIndex, setYoutubeVideoIndex] = useState(0)
   const [youtubeMuted, setYoutubeMuted] = useState(true)
   const [mensagensRecebidas, setMensagensRecebidas] = useState<GoogleSheetsMessageRow[]>([])
+  const [folhasPontoD1, setFolhasPontoD1] = useState<FolhaPontoD1[]>([])
+  const [erroFolhaPontoD1, setErroFolhaPontoD1] = useState('')
   const [mensagemGestaoAdmin, setMensagemGestaoAdmin] = useState('')
   const [statusMensagemGestao, setStatusMensagemGestao] = useState('')
   const [enviandoMensagemGestao, setEnviandoMensagemGestao] = useState(false)
@@ -197,6 +206,51 @@ export default function AdminPage() {
   }, [mesNum, router])
 
   useEffect(() => { queueMicrotask(() => { carregarDados() }) }, [carregarDados])
+
+  useEffect(() => {
+    if (DEMO_MODE || materiais.length === 0) {
+      queueMicrotask(() => {
+        setFolhasPontoD1([])
+        setErroFolhaPontoD1('')
+      })
+      return
+    }
+
+    const materiaisFolha = materiais.filter(material => material.ativo && isFolhaPontoD1(material) && isPdfMaterial(material))
+    if (materiaisFolha.length === 0) {
+      queueMicrotask(() => {
+        setFolhasPontoD1([])
+        setErroFolhaPontoD1('')
+      })
+      return
+    }
+
+    let cancelado = false
+    async function carregarFolhasPonto() {
+      try {
+        const supabase = createClient()
+        const folhasExtraidas = await Promise.all(materiaisFolha.map(async material => {
+          const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(material.file_path, 60 * 10)
+          if (error || !data?.signedUrl) return []
+          return extrairFolhasPontoD1DePdf(data.signedUrl, material)
+        }))
+
+        if (!cancelado) {
+          setFolhasPontoD1(folhasExtraidas.flat())
+          setErroFolhaPontoD1('')
+        }
+      } catch (error) {
+        console.error('Erro ao analisar folha de ponto D-1', error)
+        if (!cancelado) {
+          setFolhasPontoD1([])
+          setErroFolhaPontoD1('Não foi possível analisar a Folha de Ponto D-1 agora.')
+        }
+      }
+    }
+
+    carregarFolhasPonto()
+    return () => { cancelado = true }
+  }, [materiais])
 
   useEffect(() => {
     queueMicrotask(() => setYoutubeVideoIndex(0))
@@ -520,6 +574,11 @@ export default function AdminPage() {
   const profissionaisComCienciaCompleta = profissionaisComCienciaCompletaLista.length
   const totalMensagensRecebidas = mensagensRecebidas.length
   const ultimaMensagemRecebida = mensagensRecebidas[0]
+  const folhasPontoPorProfissional = profiles.map(profile => ({
+    profile,
+    folha: encontrarFolhaDoProfissional(folhasPontoD1, profile),
+  }))
+  const folhasPontoIdentificadas = folhasPontoPorProfissional.filter(item => item.folha).length
   const podeEditar = perfilAdmin === 'admin'
   const materiaisVisiveisGestao = materiais.filter(material => material.ativo)
   const leiturasGestao = leiturasMateriais.reduce<Record<number, string>>((acc, leitura) => {
@@ -626,6 +685,7 @@ export default function AdminPage() {
                 { label: 'Feedback medio', valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem notas', apoio: 'mes selecionado', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
                 { label: 'Profissionais cientes', valor: contagemSheetsDisponivel && totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : 'Verificar', apoio: contagemSheetsDisponivel ? `${totalLeituras}/${totalLeiturasPossiveis} assinaturas · Google Sheets ${resumoLeiturasGoogle?.totalCompatibilizado ?? 0}` : 'contagem depende do Google Sheets', cor: contagemSheetsDisponivel ? '#38bdf8' : '#facc15' },
                 { label: 'Mensagens recebidas', valor: erroMensagensAdmin ? 'Verificar' : `${totalMensagensRecebidas}`, apoio: erroMensagensAdmin || (ultimaMensagemRecebida?.nome ? `ultima: ${ultimaMensagemRecebida.nome}` : 'aba Mensagens'), cor: erroMensagensAdmin ? '#facc15' : totalMensagensRecebidas > 0 ? '#f472b6' : 'rgba(240,230,255,0.45)' },
+                { label: 'Folha D-1 analisada', valor: erroFolhaPontoD1 ? 'Verificar' : `${folhasPontoIdentificadas}/${profiles.length}`, apoio: erroFolhaPontoD1 || 'horas por profissional', cor: erroFolhaPontoD1 ? '#facc15' : folhasPontoIdentificadas === profiles.length && profiles.length > 0 ? '#4ade80' : '#38bdf8' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm executive-card" style={{ padding: 18 }}>
                   <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 8 }}>{c.label}</div>
@@ -1090,6 +1150,46 @@ export default function AdminPage() {
                 ) : (
                   <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 13, color: 'rgba(240,230,255,0.55)' }}>
                     Perfil Gestão: visualização liberada sem permissão para anexar, editar ou excluir materiais.
+                  </div>
+                )}
+
+                {(folhasPontoD1.length > 0 || erroFolhaPontoD1) && (
+                  <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Folha de Ponto D-1 por profissional</h3>
+                    <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 14 }}>
+                      Horas calculadas pelo documento anexado e comparadas com a escala prevista.
+                    </p>
+                    {erroFolhaPontoD1 ? (
+                      <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.16)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#facc15' }}>
+                        {erroFolhaPontoD1}
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                              {['Profissional','Periodo','Batidas','Escala','Com abono','Saldo','Faltas','Pagina'].map(h => (
+                                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {folhasPontoPorProfissional.map(({ profile, folha }) => (
+                              <tr key={profile.id} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                                <td style={{ padding: '12px', fontSize: 13, color: '#f0e6ff', fontWeight: 700 }}>{profile.nome}</td>
+                                <td style={{ padding: '12px', fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{folha?.periodo ?? 'Nao localizada'}</td>
+                                <td style={{ padding: '12px', fontSize: 13, color: '#38bdf8', fontWeight: 700 }}>{folha?.horas_batidas ?? '-'}</td>
+                                <td style={{ padding: '12px', fontSize: 13, color: 'rgba(240,230,255,0.65)' }}>{folha?.horas_previstas ?? '-'}</td>
+                                <td style={{ padding: '12px', fontSize: 13, color: '#c084fc', fontWeight: 700 }}>{folha?.horas_com_abono ?? '-'}</td>
+                                <td style={{ padding: '12px', fontSize: 13, color: (folha?.saldo_minutos ?? 0) >= 0 ? '#4ade80' : '#f87171', fontWeight: 800 }}>{folha?.saldo_periodo ?? '-'}</td>
+                                <td style={{ padding: '12px', fontSize: 13, color: 'rgba(240,230,255,0.65)' }}>{folha?.faltas_horas ?? '-'}</td>
+                                <td style={{ padding: '12px', fontSize: 13, color: 'rgba(240,230,255,0.65)' }}>{folha ? `${folha.material_titulo} - pag. ${folha.pagina}` : '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
 

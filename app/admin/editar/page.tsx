@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import { createClient } from '@/lib/supabase/client'
@@ -30,6 +31,40 @@ type ValorProf = { profile_id: string; realizado: number; comissao: number; feed
 
 const CONFIG_PADRAO: ConfiguracoesMes = {
   id: 0, mes: 1, ano: ANO, meta_clinica: 80000, meta_gatilho: 8000, meta_max: 12000, meta_individual_anual: 120000,
+}
+
+async function criarUsuarioAuthPorSignup(email: string, password: string, nome: string, primeiroNome: string, role: Role) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url || !anonKey) {
+    throw new Error('Supabase real nao configurado para criar o acesso.')
+  }
+
+  const authClient = createSupabaseClient(url, anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+      storageKey: `admin-create-${Date.now()}`,
+    },
+  })
+
+  const { data, error } = await authClient.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { nome, primeiro_nome: primeiroNome, role },
+    },
+  })
+
+  if (error) throw error
+  if (!data.user?.id || data.user.identities?.length === 0) {
+    throw new Error('Este e-mail ja existe no Supabase Auth ou nao retornou um UUID valido.')
+  }
+
+  await authClient.auth.signOut()
+  return data.user.id
 }
 
 export default function EditarPage() {
@@ -209,17 +244,40 @@ export default function EditarPage() {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
+        body: {
           nome,
           primeiro_nome: primeiroNome,
           email,
           password: senha,
           role: novoRole,
-        }),
+        },
       })
 
       if (functionError) {
-        throw new Error(functionError.message || 'Nao foi possivel criar o acesso no Supabase Auth.')
+        const id = await criarUsuarioAuthPorSignup(email, senha, nome, primeiroNome, novoRole)
+
+        const { error: profileError } = await supabase.from('profiles').upsert(
+          { id, nome, primeiro_nome: primeiroNome, role: novoRole, ativo: true },
+          { onConflict: 'id' }
+        )
+
+        if (profileError) throw profileError
+
+        if (novoRole === 'user') {
+          const { error: resultadosError } = await supabase.from('resultados').upsert(
+            Array.from({ length: 12 }, (_, index) => ({
+              profile_id: id,
+              mes: index + 1,
+              ano: ANO,
+              realizado: 0,
+              comissao_avaliacoes: 0,
+              nota_feedback: 0,
+            })),
+            { onConflict: 'profile_id,mes,ano' }
+          )
+
+          if (resultadosError) throw resultadosError
+        }
       }
 
       setNovoNome('')
@@ -235,11 +293,7 @@ export default function EditarPage() {
     } catch (error) {
       console.error('Erro ao adicionar profissional', error)
       const mensagem = error instanceof Error ? error.message : ''
-      if (mensagem.includes('Failed to send a request') || mensagem.includes('FunctionsHttpError') || mensagem.includes('404')) {
-        setErroSalvar('A funcao criar-profissional ainda nao esta ativa no Supabase. Implante a Edge Function e tente novamente.')
-      } else {
-        setErroSalvar(mensagem || 'Nao foi possivel adicionar a profissional. Verifique as permissoes do admin e se o usuario ja existe no Supabase Auth.')
-      }
+      setErroSalvar(mensagem || 'Nao foi possivel adicionar a profissional. Verifique as permissoes do admin e se o usuario ja existe no Supabase Auth.')
     } finally {
       setAdicionando(false)
     }

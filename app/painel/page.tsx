@@ -17,6 +17,12 @@ import type { Profile, ConfiguracoesMes, MaterialInformativo, MaterialLeitura } 
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
 import { buscarLeiturasMateriaisGoogleSheets, enviarMensagemGoogleSheets, registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
+import {
+  encontrarFolhaDoProfissional,
+  extrairFolhasPontoD1DePdf,
+  isFolhaPontoD1,
+  type FolhaPontoD1,
+} from '@/lib/ponto-d1'
 
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
@@ -94,12 +100,14 @@ export default function PainelProfissional() {
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
   const [leiturasMateriais, setLeiturasMateriais] = useState<Record<number, string>>({})
   const [erroMateriais, setErroMateriais] = useState('')
-  const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; baseUrl: string; pagina: number } | null>(null)
+  const [visualizadorPdf, setVisualizadorPdf] = useState<{ materialId: number; titulo: string; baseUrl: string; pagina: number; paginaMin?: number; paginaMax?: number } | null>(null)
   const [totalPaginasPdf, setTotalPaginasPdf] = useState(0)
   const [carregandoPdf, setCarregandoPdf] = useState(false)
   const [fraseMotivacional, setFraseMotivacional] = useState('')
   const [youtubeVideoIndex, setYoutubeVideoIndex] = useState(0)
   const [youtubeMuted, setYoutubeMuted] = useState(true)
+  const [folhasPontoD1, setFolhasPontoD1] = useState<FolhaPontoD1[]>([])
+  const [erroFolhaPontoD1, setErroFolhaPontoD1] = useState('')
   const [mensagemAdmin, setMensagemAdmin] = useState('')
   const [statusMensagemAdmin, setStatusMensagemAdmin] = useState('')
   const [enviandoMensagemAdmin, setEnviandoMensagemAdmin] = useState(false)
@@ -261,6 +269,51 @@ export default function PainelProfissional() {
   }, [])
 
   useEffect(() => {
+    if (DEMO_MODE || !profile || materiais.length === 0) {
+      queueMicrotask(() => {
+        setFolhasPontoD1([])
+        setErroFolhaPontoD1('')
+      })
+      return
+    }
+
+    const materiaisFolha = materiais.filter(material => isFolhaPontoD1(material) && isPdfMaterial(material))
+    if (materiaisFolha.length === 0) {
+      queueMicrotask(() => {
+        setFolhasPontoD1([])
+        setErroFolhaPontoD1('')
+      })
+      return
+    }
+
+    let cancelado = false
+    async function carregarFolhasPonto() {
+      try {
+        const supabase = createClient()
+        const folhasExtraidas = await Promise.all(materiaisFolha.map(async material => {
+          const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(material.file_path, 60 * 10)
+          if (error || !data?.signedUrl) return []
+          return extrairFolhasPontoD1DePdf(data.signedUrl, material)
+        }))
+
+        if (!cancelado) {
+          setFolhasPontoD1(folhasExtraidas.flat())
+          setErroFolhaPontoD1('')
+        }
+      } catch (error) {
+        console.error('Erro ao analisar folha de ponto D-1', error)
+        if (!cancelado) {
+          setFolhasPontoD1([])
+          setErroFolhaPontoD1('Não foi possível analisar sua Folha de Ponto D-1 agora.')
+        }
+      }
+    }
+
+    carregarFolhasPonto()
+    return () => { cancelado = true }
+  }, [materiais, profile])
+
+  useEffect(() => {
     const primeiroPdfPendente = materiais.find(material => isPdfMaterial(material) && !leiturasMateriais[material.id])
     const primeiroPdf = primeiroPdfPendente ?? materiais.find(isPdfMaterial)
     if (!primeiroPdf) {
@@ -315,8 +368,17 @@ export default function PainelProfissional() {
       return
     }
 
+    const folha = isFolhaPontoD1(material) ? encontrarFolhaDoProfissional(folhasPontoD1, profile) : null
+    const paginaInicial = folha?.pagina ?? 1
     setErroMateriais('')
-    setVisualizadorPdf({ materialId: material.id, titulo: material.titulo, baseUrl: data.signedUrl, pagina: 1 })
+    setVisualizadorPdf({
+      materialId: material.id,
+      titulo: folha ? `${material.titulo} - ${folha.nome}` : material.titulo,
+      baseUrl: data.signedUrl,
+      pagina: paginaInicial,
+      paginaMin: folha?.pagina,
+      paginaMax: folha?.pagina,
+    })
     setTotalPaginasPdf(0)
     setCarregandoPdf(false)
   }
@@ -324,8 +386,10 @@ export default function PainelProfissional() {
   function mudarPaginaPdf(delta: number) {
     setVisualizadorPdf(atual => {
       if (!atual) return atual
-      const proxima = Math.max(1, atual.pagina + delta)
-      return { ...atual, pagina: totalPaginasPdf > 0 ? Math.min(proxima, totalPaginasPdf) : proxima }
+      const minimo = atual.paginaMin ?? 1
+      const maximo = atual.paginaMax ?? totalPaginasPdf
+      const proxima = Math.max(minimo, atual.pagina + delta)
+      return { ...atual, pagina: maximo > 0 ? Math.min(proxima, maximo) : proxima }
     })
   }
 
@@ -422,11 +486,13 @@ export default function PainelProfissional() {
   const pctAnual = metaAnual > 0 ? parseFloat(((acumuladoAnual / metaAnual) * 100).toFixed(1)) : 0
   const faltaMensal = Math.max(0, metaMax - realizado)
   const faltaAnual = Math.max(0, metaAnual - acumuladoAnual)
-  const materiaisPdf = materiais.filter(isPdfMaterial)
+  const folhaPontoProfissional = encontrarFolhaDoProfissional(folhasPontoD1, profile)
+  const materiaisIndividuais = materiais.filter(material => !isFolhaPontoD1(material) || !folhasPontoD1.length || folhaPontoProfissional?.material_id === material.id)
+  const materiaisPdf = materiaisIndividuais.filter(isPdfMaterial)
   const materiaisPendentesCiencia = materiaisPdf.filter(material => !leiturasMateriais[material.id])
   const precisaLiberarMateriais = materiaisPendentesCiencia.length > 0
   const podeVisualizarDados = !precisaLiberarMateriais
-  const materiaisAgrupados = materiais.reduce<Record<string, MaterialInformativo[]>>((acc, material) => {
+  const materiaisAgrupados = materiaisIndividuais.reduce<Record<string, MaterialInformativo[]>>((acc, material) => {
     const categoria = categoriaDoMaterial(material)
     acc[categoria] = [...(acc[categoria] ?? []), material]
     return acc
@@ -591,6 +657,34 @@ export default function PainelProfissional() {
             </div>
           ))}
         </div>
+
+        {(folhaPontoProfissional || erroFolhaPontoD1) && (
+          <div className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Folha de Ponto D-1</h3>
+            {erroFolhaPontoD1 ? (
+              <div style={{ color: '#facc15', fontSize: 13 }}>{erroFolhaPontoD1}</div>
+            ) : folhaPontoProfissional && (
+              <>
+                <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 16 }}>
+                  Período {folhaPontoProfissional.periodo}. Visualização individual liberada na página {folhaPontoProfissional.pagina} do documento.
+                </p>
+                <div className="responsive-grid professional-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                  {[
+                    { label: 'Horas batidas', valor: folhaPontoProfissional.horas_batidas, cor: '#38bdf8' },
+                    { label: 'Escala prevista', valor: folhaPontoProfissional.horas_previstas, cor: 'rgba(240,230,255,0.85)' },
+                    { label: 'Trabalhadas + abono', valor: folhaPontoProfissional.horas_com_abono, cor: '#c084fc' },
+                    { label: 'Saldo do período', valor: folhaPontoProfissional.saldo_periodo, cor: folhaPontoProfissional.saldo_minutos >= 0 ? '#4ade80' : '#f87171' },
+                  ].map(item => (
+                    <div key={item.label} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,0.03)' }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: item.cor }}>{item.valor}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         <div id="painel-metas" className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 20 }}>📊 Progresso Mensal</h3>
@@ -781,7 +875,7 @@ export default function PainelProfissional() {
                 })}
               </section>
             ))}
-            {materiais.length === 0 && !erroMateriais && (
+            {materiaisIndividuais.length === 0 && !erroMateriais && (
               <div style={{ textAlign: 'center', color: 'rgba(240,230,255,0.35)', fontSize: 14, padding: '22px 10px' }}>
                 Nenhum material informativo disponível no momento.
               </div>
@@ -804,7 +898,7 @@ export default function PainelProfissional() {
                     <button
                       type="button"
                       onClick={() => mudarPaginaPdf(-1)}
-                      disabled={visualizadorPdf.pagina <= 1}
+                      disabled={visualizadorPdf.pagina <= (visualizadorPdf.paginaMin ?? 1)}
                       className="material-page-button"
                     >
                       Voltar página
@@ -813,7 +907,7 @@ export default function PainelProfissional() {
                     <button
                       type="button"
                       onClick={() => mudarPaginaPdf(1)}
-                      disabled={totalPaginasPdf > 0 && visualizadorPdf.pagina >= totalPaginasPdf}
+                      disabled={totalPaginasPdf > 0 && visualizadorPdf.pagina >= (visualizadorPdf.paginaMax ?? totalPaginasPdf)}
                       className="material-page-button"
                     >
                       Próxima página
