@@ -502,8 +502,10 @@ export default function AdminPage() {
   const materiaisObrigatorios = materiais.filter(material => material.ativo && isPdfMaterial(material))
   const idsProfissionais = new Set(profiles.map(profile => profile.id))
   const idsMateriaisObrigatorios = new Set(materiaisObrigatorios.map(material => material.id))
+  const leiturasContagemSheets = resumoLeiturasGoogle?.leituras ?? []
+  const contagemSheetsDisponivel = Boolean(resumoLeiturasGoogle)
   const assinaturasUnicas = new Set(
-    leiturasMateriais
+    leiturasContagemSheets
       .filter(leitura => idsProfissionais.has(leitura.profile_id) && idsMateriaisObrigatorios.has(leitura.material_id))
       .map(leitura => `${leitura.profile_id}:${leitura.material_id}`),
   )
@@ -538,7 +540,7 @@ export default function AdminPage() {
 
   function totalLeiturasMaterial(materialId: number) {
     return new Set(
-      leiturasMateriais
+      leiturasContagemSheets
         .filter(leitura => leitura.material_id === materialId && idsProfissionais.has(leitura.profile_id))
         .map(leitura => leitura.profile_id),
     ).size
@@ -623,7 +625,7 @@ export default function AdminPage() {
                 { label: 'Abaixo do gatilho', valor: `${abaixoDoGatilho}`, apoio: 'profissionais', cor: abaixoDoGatilho === 0 ? '#4ade80' : '#f87171' },
                 { label: 'Perto da meta', valor: `${pertoDaMeta}`, apoio: 'acima de 80%', cor: '#facc15' },
                 { label: 'Feedback medio', valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem notas', apoio: 'mes selecionado', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
-                { label: 'Profissionais cientes', valor: totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : '0/0', apoio: `${totalLeituras}/${totalLeiturasPossiveis} assinaturas${resumoLeiturasGoogle ? ` · Sheets ${resumoLeiturasGoogle.totalCompatibilizado}` : ''}`, cor: '#38bdf8' },
+                { label: 'Profissionais cientes', valor: contagemSheetsDisponivel && totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : 'Verificar', apoio: contagemSheetsDisponivel ? `${totalLeituras}/${totalLeiturasPossiveis} assinaturas · Google Sheets ${resumoLeiturasGoogle?.totalCompatibilizado ?? 0}` : 'contagem depende do Google Sheets', cor: contagemSheetsDisponivel ? '#38bdf8' : '#facc15' },
                 { label: 'Mensagens recebidas', valor: erroMensagensAdmin ? 'Verificar' : `${totalMensagensRecebidas}`, apoio: erroMensagensAdmin || (ultimaMensagemRecebida?.nome ? `ultima: ${ultimaMensagemRecebida.nome}` : 'aba Mensagens'), cor: erroMensagensAdmin ? '#facc15' : totalMensagensRecebidas > 0 ? '#f472b6' : 'rgba(240,230,255,0.45)' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm executive-card" style={{ padding: 18 }}>
@@ -634,26 +636,32 @@ export default function AdminPage() {
                     <div className="awareness-popover-trigger" tabIndex={0} aria-label="Ver profissionais cientes e pendentes">
                       Ver nomes
                       <div className="awareness-popover">
-                        <div>
-                          <div className="awareness-popover-title">Assinaram</div>
-                          {profissionaisComCienciaCompletaLista.length > 0 ? (
-                            <ul>
-                              {profissionaisComCienciaCompletaLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
-                            </ul>
-                          ) : (
-                            <p>Nenhuma profissional assinou ainda.</p>
-                          )}
-                        </div>
-                        <div>
-                          <div className="awareness-popover-title pending">Faltam assinar</div>
-                          {profissionaisPendentesCienciaLista.length > 0 ? (
-                            <ul>
-                              {profissionaisPendentesCienciaLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
-                            </ul>
-                          ) : (
-                            <p>Todas as profissionais assinaram.</p>
-                          )}
-                        </div>
+                        {contagemSheetsDisponivel ? (
+                          <>
+                            <div>
+                              <div className="awareness-popover-title">Assinaram</div>
+                              {profissionaisComCienciaCompletaLista.length > 0 ? (
+                                <ul>
+                                  {profissionaisComCienciaCompletaLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
+                                </ul>
+                              ) : (
+                                <p>Nenhuma profissional assinou ainda.</p>
+                              )}
+                            </div>
+                            <div>
+                              <div className="awareness-popover-title pending">Faltam assinar</div>
+                              {profissionaisPendentesCienciaLista.length > 0 ? (
+                                <ul>
+                                  {profissionaisPendentesCienciaLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
+                                </ul>
+                              ) : (
+                                <p>Todas as profissionais assinaram.</p>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <p>A contagem de ciência será exibida somente após resposta do Google Sheets.</p>
+                        )}
                       </div>
                     </div>
                   )}
