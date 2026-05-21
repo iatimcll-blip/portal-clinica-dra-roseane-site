@@ -15,7 +15,7 @@ import {
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes, MaterialInformativo, MaterialLeitura } from '@/lib/types'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
-import { buscarLeiturasMateriaisGoogleSheets, registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
+import { buscarLeiturasMateriaisGoogleSheets, enviarMensagemGoogleSheets, registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
 
 const ANO = 2025
@@ -372,7 +372,7 @@ export default function PainelProfissional() {
     setErroMateriais('')
   }
 
-  function enviarMensagemAdmin(event: React.SyntheticEvent) {
+  async function enviarMensagemAdmin(event: React.SyntheticEvent) {
     event.preventDefault()
     if (!profileId || !profile) return
 
@@ -385,19 +385,23 @@ export default function PainelProfissional() {
     setEnviandoMensagemAdmin(true)
     setStatusMensagemAdmin('')
 
-    registrarEventoGoogleSheets({
-      tipo: 'mensagem_texto',
-      email: profileEmail,
-      nome: profile.nome,
-      perfil: profile.role,
-      profile_id: profileId,
-      mensagem: texto,
-      destino: 'admin',
-    })
+    try {
+      await enviarMensagemGoogleSheets({
+        email: profileEmail,
+        nome: profile.nome,
+        perfil: profile.role,
+        profile_id: profileId,
+        mensagem: texto,
+        destino: 'admin',
+      })
 
-    setMensagemAdmin('')
-    setStatusMensagemAdmin('Mensagem enviada para o Admin e registrada no Google Sheets.')
-    window.setTimeout(() => setEnviandoMensagemAdmin(false), 500)
+      setMensagemAdmin('')
+      setStatusMensagemAdmin('Mensagem enviada para o Admin e registrada no Google Sheets.')
+    } catch {
+      setStatusMensagemAdmin('Não foi possível registrar no Google Sheets. Atualize o Apps Script e tente novamente.')
+    } finally {
+      setEnviandoMensagemAdmin(false)
+    }
   }
 
   function categoriaDoMaterial(material: MaterialInformativo) {

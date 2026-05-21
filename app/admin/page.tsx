@@ -16,7 +16,7 @@ import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
-import { buscarLeiturasMateriaisGoogleSheets, buscarMensagensGoogleSheets, registrarEventoGoogleSheets, type GoogleSheetsMessageRow } from '@/lib/google-sheets-sync'
+import { buscarLeiturasMateriaisGoogleSheets, buscarMensagensGoogleSheets, enviarMensagemGoogleSheets, registrarEventoGoogleSheets, type GoogleSheetsMessageRow } from '@/lib/google-sheets-sync'
 import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
 
 type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
@@ -80,6 +80,7 @@ export default function AdminPage() {
   const [mensagemGestaoAdmin, setMensagemGestaoAdmin] = useState('')
   const [statusMensagemGestao, setStatusMensagemGestao] = useState('')
   const [enviandoMensagemGestao, setEnviandoMensagemGestao] = useState(false)
+  const [erroMensagensAdmin, setErroMensagensAdmin] = useState('')
   const [loading, setLoading] = useState(true)
 
   const mesNum = mesNumero(mesSelecionado)
@@ -165,8 +166,14 @@ export default function AdminPage() {
     setLoading(false)
 
     buscarMensagensGoogleSheets()
-      .then(mensagens => setMensagensRecebidas(mensagens))
-      .catch(() => setMensagensRecebidas([]))
+      .then(mensagens => {
+        setMensagensRecebidas(mensagens)
+        setErroMensagensAdmin('')
+      })
+      .catch(() => {
+        setMensagensRecebidas([])
+        setErroMensagensAdmin('Atualize o Apps Script para habilitar a leitura da aba Mensagens.')
+      })
 
     buscarLeiturasMateriaisGoogleSheets()
       .then(linhasGoogle => {
@@ -432,7 +439,7 @@ export default function AdminPage() {
     setErroMaterial('')
   }
 
-  function enviarMensagemGestaoAdmin(event: React.SyntheticEvent) {
+  async function enviarMensagemGestaoAdmin(event: React.SyntheticEvent) {
     event.preventDefault()
     if (!profileIdAtual) return
 
@@ -445,19 +452,23 @@ export default function AdminPage() {
     setEnviandoMensagemGestao(true)
     setStatusMensagemGestao('')
 
-    registrarEventoGoogleSheets({
-      tipo: 'mensagem_texto',
-      email: emailAtual,
-      nome: nomeAtual,
-      perfil: perfilAdmin,
-      profile_id: profileIdAtual,
-      mensagem: texto,
-      destino: 'admin',
-    })
+    try {
+      await enviarMensagemGoogleSheets({
+        email: emailAtual,
+        nome: nomeAtual,
+        perfil: perfilAdmin,
+        profile_id: profileIdAtual,
+        mensagem: texto,
+        destino: 'admin',
+      })
 
-    setMensagemGestaoAdmin('')
-    setStatusMensagemGestao('Mensagem enviada para o Admin e registrada no Google Sheets.')
-    window.setTimeout(() => setEnviandoMensagemGestao(false), 500)
+      setMensagemGestaoAdmin('')
+      setStatusMensagemGestao('Mensagem enviada para o Admin e registrada no Google Sheets.')
+    } catch {
+      setStatusMensagemGestao('Não foi possível registrar no Google Sheets. Atualize o Apps Script e tente novamente.')
+    } finally {
+      setEnviandoMensagemGestao(false)
+    }
   }
 
   function trocarVideoYoutube(delta: number) {
@@ -613,7 +624,7 @@ export default function AdminPage() {
                 { label: 'Perto da meta', valor: `${pertoDaMeta}`, apoio: 'acima de 80%', cor: '#facc15' },
                 { label: 'Feedback medio', valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem notas', apoio: 'mes selecionado', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
                 { label: 'Profissionais cientes', valor: totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : '0/0', apoio: `${totalLeituras}/${totalLeiturasPossiveis} assinaturas${resumoLeiturasGoogle ? ` · Sheets ${resumoLeiturasGoogle.totalCompatibilizado}` : ''}`, cor: '#38bdf8' },
-                { label: 'Mensagens recebidas', valor: `${totalMensagensRecebidas}`, apoio: ultimaMensagemRecebida?.nome ? `ultima: ${ultimaMensagemRecebida.nome}` : 'aba Mensagens', cor: totalMensagensRecebidas > 0 ? '#f472b6' : 'rgba(240,230,255,0.45)' },
+                { label: 'Mensagens recebidas', valor: erroMensagensAdmin ? 'Verificar' : `${totalMensagensRecebidas}`, apoio: erroMensagensAdmin || (ultimaMensagemRecebida?.nome ? `ultima: ${ultimaMensagemRecebida.nome}` : 'aba Mensagens'), cor: erroMensagensAdmin ? '#facc15' : totalMensagensRecebidas > 0 ? '#f472b6' : 'rgba(240,230,255,0.45)' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm executive-card" style={{ padding: 18 }}>
                   <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 8 }}>{c.label}</div>
@@ -652,9 +663,9 @@ export default function AdminPage() {
                       <div className="message-popover">
                         <div className="awareness-popover-title">Mensagens</div>
                         <p>
-                          {totalMensagensRecebidas > 0
+                          {erroMensagensAdmin || (totalMensagensRecebidas > 0
                             ? `${totalMensagensRecebidas} mensagem(ns) registradas na aba Mensagens do Google Sheets.`
-                            : 'Nenhuma mensagem registrada no Google Sheets até agora.'}
+                            : 'Nenhuma mensagem registrada no Google Sheets até agora.')}
                         </p>
                         {ultimaMensagemRecebida?.nome && (
                           <p>Último envio: {ultimaMensagemRecebida.nome}</p>

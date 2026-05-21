@@ -57,6 +57,15 @@ export type GoogleSheetsMessageRow = {
   pagina?: string
 }
 
+export type GoogleSheetsMessagePayload = {
+  email?: string | null
+  nome?: string | null
+  perfil?: string | null
+  profile_id?: string | null
+  mensagem: string
+  destino?: 'admin'
+}
+
 export function registrarEventoGoogleSheets(evento: SheetsEvent) {
   if (!GOOGLE_SHEETS_WEBHOOK_URL || typeof window === 'undefined') return
 
@@ -157,6 +166,54 @@ export function buscarMensagensGoogleSheets(): Promise<GoogleSheetsMessageRow[]>
     script.onerror = () => {
       cleanup()
       reject(new Error('Nao foi possivel carregar as mensagens do Google Sheets.'))
+    }
+
+    document.body.appendChild(script)
+  })
+}
+
+export function enviarMensagemGoogleSheets(mensagem: GoogleSheetsMessagePayload): Promise<void> {
+  if (!GOOGLE_SHEETS_WEBHOOK_URL || typeof window === 'undefined') return Promise.reject(new Error('Webhook do Google Sheets nao configurado.'))
+
+  return new Promise((resolve, reject) => {
+    const callbackName = `googleSheetsEnviarMensagem_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    const script = document.createElement('script')
+    const timeout = window.setTimeout(() => {
+      cleanup()
+      reject(new Error('Tempo esgotado ao registrar a mensagem no Google Sheets.'))
+    }, 8000)
+
+    function cleanup() {
+      window.clearTimeout(timeout)
+      script.remove()
+      delete (window as unknown as Record<string, unknown>)[callbackName]
+    }
+
+    ;(window as unknown as Record<string, (payload: JsonpResponse<{ status?: string }>) => void>)[callbackName] = payload => {
+      cleanup()
+      if (!payload?.ok) {
+        reject(new Error(payload?.error || 'Nao foi possivel registrar a mensagem no Google Sheets.'))
+        return
+      }
+      resolve()
+    }
+
+    const url = new URL(GOOGLE_SHEETS_WEBHOOK_URL)
+    url.searchParams.set('acao', 'registrar_mensagem')
+    url.searchParams.set('callback', callbackName)
+    url.searchParams.set('payload', JSON.stringify({
+      tipo: 'mensagem_texto',
+      ...mensagem,
+      destino: mensagem.destino ?? 'admin',
+      origem: 'portal-clinica',
+      registrado_em: new Date().toISOString(),
+      pagina: window.location.pathname,
+      user_agent: window.navigator.userAgent,
+    }))
+    script.src = url.toString()
+    script.onerror = () => {
+      cleanup()
+      reject(new Error('Nao foi possivel conectar ao Google Sheets.'))
     }
 
     document.body.appendChild(script)

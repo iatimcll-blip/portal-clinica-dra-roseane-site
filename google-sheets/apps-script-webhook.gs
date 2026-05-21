@@ -34,6 +34,14 @@ function doGet(e) {
   try {
     var tipo = e && e.parameter ? e.parameter.tipo : ''
     var callback = e && e.parameter ? e.parameter.callback : ''
+    var acao = e && e.parameter ? e.parameter.acao : ''
+
+    if (acao === 'registrar_mensagem') {
+      var payloadMensagem = JSON.parse(e.parameter.payload || '{}')
+      registrarMensagem_(payloadMensagem)
+
+      return responderJson_({ ok: true, data: { status: 'mensagem_registrada' } }, callback)
+    }
 
     if (tipo === 'mensagens') {
       var ssMensagens = SpreadsheetApp.getActiveSpreadsheet()
@@ -115,21 +123,7 @@ function doPost(e) {
     }
 
     if (payload.tipo === 'mensagem_texto') {
-      var sheetMensagens = getOrCreateSheet_(ss, ABA_MENSAGENS, CABECALHO_MENSAGENS)
-
-      prepararColunaDataHora_(sheetMensagens)
-      sheetMensagens.appendRow([
-        formatarDataHoraBrasil_(payload.registrado_em),
-        payload.email || '',
-        payload.nome || '',
-        payload.perfil || '',
-        payload.profile_id || '',
-        payload.mensagem || '',
-        payload.destino || 'admin',
-        payload.pagina || '',
-        payload.origem || '',
-        payload.user_agent || '',
-      ])
+      registrarMensagem_(payload, ss)
     }
 
     return ContentService
@@ -199,6 +193,25 @@ function listarMensagens_(sheet) {
       }
     })
     .reverse()
+}
+
+function registrarMensagem_(payload, ss) {
+  var planilha = ss || SpreadsheetApp.getActiveSpreadsheet()
+  var sheetMensagens = getOrCreateSheet_(planilha, ABA_MENSAGENS, CABECALHO_MENSAGENS)
+
+  prepararColunaDataHora_(sheetMensagens)
+  sheetMensagens.appendRow([
+    formatarDataHoraBrasil_(payload.registrado_em),
+    payload.email || '',
+    payload.nome || '',
+    payload.perfil || '',
+    payload.profile_id || '',
+    payload.mensagem || '',
+    payload.destino || 'admin',
+    payload.pagina || '',
+    payload.origem || '',
+    payload.user_agent || '',
+  ])
 }
 
 function normalizarChave_(valor) {
