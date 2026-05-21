@@ -498,6 +498,11 @@ body {
   cursor: pointer;
 }
 
+.youtube-controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .youtube-controls span {
   color: rgba(240,230,255,0.5);
   font-size: 11px;

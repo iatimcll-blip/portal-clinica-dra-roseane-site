@@ -21,7 +21,8 @@ import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
-const YOUTUBE_VIDEO_IDS = ['gK8WPJ6WsOQ', '6fptiuW0ck0', 'lswlKf-q_bU', 'Zj1PE4m9wPQ']
+const YOUTUBE_UPLOADS_PLAYLIST_ID = 'UUomJ8VZUli9JIv2Cgpzf_DQ'
+const YOUTUBE_PLAYLIST_LIMIT = 50
 const FOTOS_PROFISSIONAIS: Record<string, string> = {
   erica: '/erica.png',
   gilmara: '/Gilmara.png',
@@ -253,10 +254,9 @@ export default function PainelProfissional() {
 
   useEffect(() => {
     const indice = Math.floor(Math.random() * FRASES_MOTIVACIONAIS.length)
-    const indiceVideo = Math.floor(Math.random() * YOUTUBE_VIDEO_IDS.length)
     queueMicrotask(() => {
       setFraseMotivacional(FRASES_MOTIVACIONAIS[indice])
-      setYoutubeVideoIndex(indiceVideo)
+      setYoutubeVideoIndex(0)
     })
   }, [])
 
@@ -409,7 +409,7 @@ export default function PainelProfissional() {
   }
 
   function trocarVideoYoutube(delta: number) {
-    setYoutubeVideoIndex(atual => (atual + delta + YOUTUBE_VIDEO_IDS.length) % YOUTUBE_VIDEO_IDS.length)
+    setYoutubeVideoIndex(atual => Math.min(Math.max(atual + delta, 0), YOUTUBE_PLAYLIST_LIMIT - 1))
   }
 
   const metaGatilho = config?.meta_gatilho ?? 0
@@ -431,8 +431,7 @@ export default function PainelProfissional() {
     acc[categoria] = [...(acc[categoria] ?? []), material]
     return acc
   }, {})
-  const youtubeVideoId = YOUTUBE_VIDEO_IDS[youtubeVideoIndex] ?? YOUTUBE_VIDEO_IDS[0]
-  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&mute=${youtubeMuted ? '1' : '0'}&playsinline=1&rel=0&controls=1`
+  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${YOUTUBE_UPLOADS_PLAYLIST_ID}&index=${youtubeVideoIndex}&autoplay=1&mute=${youtubeMuted ? '1' : '0'}&playsinline=1&rel=0&controls=1`
 
   if (loading || !profile) {
     return (
@@ -685,8 +684,8 @@ export default function PainelProfissional() {
               </a>
             </div>
             <div className="youtube-controls">
-              <button type="button" onClick={() => trocarVideoYoutube(-1)}>Anterior</button>
-              <span>Vídeo {youtubeVideoIndex + 1} de {YOUTUBE_VIDEO_IDS.length}</span>
+              <button type="button" onClick={() => trocarVideoYoutube(-1)} disabled={youtubeVideoIndex === 0}>Anterior</button>
+              <span>Vídeo {youtubeVideoIndex + 1}</span>
               <button type="button" onClick={() => trocarVideoYoutube(1)}>Próximo</button>
               <button type="button" onClick={() => setYoutubeMuted(atual => !atual)}>
                 {youtubeMuted ? 'Ativar som' : 'Desativar som'}
@@ -694,7 +693,7 @@ export default function PainelProfissional() {
             </div>
             <div className="youtube-frame-shell">
               <iframe
-                key={youtubeVideoId}
+                key={`${YOUTUBE_UPLOADS_PLAYLIST_ID}-${youtubeVideoIndex}-${youtubeMuted ? 'muted' : 'sound'}`}
                 src={youtubeEmbedUrl}
                 title="Vídeos do canal Dra. Roseane Débora"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

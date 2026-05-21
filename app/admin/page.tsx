@@ -24,7 +24,8 @@ type PerfilAdmin = 'admin' | 'gestao'
 
 const BUCKET_MATERIAIS = 'materiais-informativos'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
-const YOUTUBE_VIDEO_IDS = ['gK8WPJ6WsOQ', '6fptiuW0ck0', 'lswlKf-q_bU', 'Zj1PE4m9wPQ']
+const YOUTUBE_UPLOADS_PLAYLIST_ID = 'UUomJ8VZUli9JIv2Cgpzf_DQ'
+const YOUTUBE_PLAYLIST_LIMIT = 50
 const LIMITE_MATERIAL_BYTES = 50 * 1024 * 1024
 const EXTENSOES_MATERIAIS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'csv', 'mp4', 'mov', 'zip']
 const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos']
@@ -198,8 +199,7 @@ export default function AdminPage() {
   useEffect(() => { queueMicrotask(() => { carregarDados() }) }, [carregarDados])
 
   useEffect(() => {
-    const indiceVideo = Math.floor(Math.random() * YOUTUBE_VIDEO_IDS.length)
-    queueMicrotask(() => setYoutubeVideoIndex(indiceVideo))
+    queueMicrotask(() => setYoutubeVideoIndex(0))
   }, [])
 
   useEffect(() => {
@@ -472,7 +472,7 @@ export default function AdminPage() {
   }
 
   function trocarVideoYoutube(delta: number) {
-    setYoutubeVideoIndex(atual => (atual + delta + YOUTUBE_VIDEO_IDS.length) % YOUTUBE_VIDEO_IDS.length)
+    setYoutubeVideoIndex(atual => Math.min(Math.max(atual + delta, 0), YOUTUBE_PLAYLIST_LIMIT - 1))
   }
 
   const cfg = config ?? { meta_clinica: 55000, meta_gatilho: 15000, meta_max: 18000, meta_individual_anual: 187000 }
@@ -531,8 +531,7 @@ export default function AdminPage() {
     acc[categoria] = [...(acc[categoria] ?? []), material]
     return acc
   }, {})
-  const youtubeVideoId = YOUTUBE_VIDEO_IDS[youtubeVideoIndex] ?? YOUTUBE_VIDEO_IDS[0]
-  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/${youtubeVideoId}?autoplay=1&mute=${youtubeMuted ? '1' : '0'}&playsinline=1&rel=0&controls=1`
+  const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${YOUTUBE_UPLOADS_PLAYLIST_ID}&index=${youtubeVideoIndex}&autoplay=1&mute=${youtubeMuted ? '1' : '0'}&playsinline=1&rel=0&controls=1`
 
   function categoriaDoMaterial(material: MaterialInformativo) {
     return material.categoria || 'Comunicados'
@@ -727,8 +726,8 @@ export default function AdminPage() {
                       </a>
                     </div>
                     <div className="youtube-controls">
-                      <button type="button" onClick={() => trocarVideoYoutube(-1)}>Anterior</button>
-                      <span>Vídeo {youtubeVideoIndex + 1} de {YOUTUBE_VIDEO_IDS.length}</span>
+                      <button type="button" onClick={() => trocarVideoYoutube(-1)} disabled={youtubeVideoIndex === 0}>Anterior</button>
+                      <span>Vídeo {youtubeVideoIndex + 1}</span>
                       <button type="button" onClick={() => trocarVideoYoutube(1)}>Próximo</button>
                       <button type="button" onClick={() => setYoutubeMuted(atual => !atual)}>
                         {youtubeMuted ? 'Ativar som' : 'Desativar som'}
@@ -736,7 +735,7 @@ export default function AdminPage() {
                     </div>
                     <div className="youtube-frame-shell">
                       <iframe
-                        key={youtubeVideoId}
+                        key={`${YOUTUBE_UPLOADS_PLAYLIST_ID}-${youtubeVideoIndex}-${youtubeMuted ? 'muted' : 'sound'}`}
                         src={youtubeEmbedUrl}
                         title="Vídeos do canal Dra. Roseane Débora"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
