@@ -32,12 +32,6 @@ const CONFIG_PADRAO: ConfiguracoesMes = {
   id: 0, mes: 1, ano: ANO, meta_clinica: 80000, meta_gatilho: 8000, meta_max: 12000, meta_individual_anual: 120000,
 }
 
-function getCriarProfissionalUrl() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl) return ''
-  return `${supabaseUrl.replace('.supabase.co', '.functions.supabase.co')}/criar-profissional`
-}
-
 export default function EditarPage() {
   const router = useRouter()
   const [mesSelecionado, setMesSelecionado] = useState('Janeiro')
@@ -203,12 +197,6 @@ export default function EditarPage() {
         return
       }
 
-      const functionUrl = getCriarProfissionalUrl()
-      if (!functionUrl) {
-        setErroSalvar('Configure NEXT_PUBLIC_SUPABASE_URL para criar acessos automaticamente.')
-        return
-      }
-
       const supabase = createClient()
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
       const accessToken = sessionData.session?.access_token
@@ -217,11 +205,9 @@ export default function EditarPage() {
         return
       }
 
-      const response = await fetch(functionUrl, {
-        method: 'POST',
+      const { error: functionError } = await supabase.functions.invoke('criar-profissional', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           nome,
@@ -232,9 +218,8 @@ export default function EditarPage() {
         }),
       })
 
-      const payload = await response.json().catch(() => ({} as { error?: string }))
-      if (!response.ok) {
-        throw new Error(payload.error || 'Nao foi possivel criar o acesso no Supabase Auth.')
+      if (functionError) {
+        throw new Error(functionError.message || 'Nao foi possivel criar o acesso no Supabase Auth.')
       }
 
       setNovoNome('')
@@ -249,7 +234,12 @@ export default function EditarPage() {
       await carregar(mesSelecionado)
     } catch (error) {
       console.error('Erro ao adicionar profissional', error)
-      setErroSalvar('Nao foi possivel adicionar a profissional. Verifique as permissoes do admin e se o usuario ja existe no Supabase Auth.')
+      const mensagem = error instanceof Error ? error.message : ''
+      if (mensagem.includes('Failed to send a request') || mensagem.includes('FunctionsHttpError') || mensagem.includes('404')) {
+        setErroSalvar('A funcao criar-profissional ainda nao esta ativa no Supabase. Implante a Edge Function e tente novamente.')
+      } else {
+        setErroSalvar(mensagem || 'Nao foi possivel adicionar a profissional. Verifique as permissoes do admin e se o usuario ja existe no Supabase Auth.')
+      }
     } finally {
       setAdicionando(false)
     }

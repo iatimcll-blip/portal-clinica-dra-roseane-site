@@ -1,0 +1,4 @@
+project_id = "dukmdxpgibycgsvgqrbf"
+
+[functions.criar-profissional]
+verify_jwt = false
