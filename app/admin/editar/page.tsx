@@ -32,6 +32,12 @@ const CONFIG_PADRAO: ConfiguracoesMes = {
   id: 0, mes: 1, ano: ANO, meta_clinica: 80000, meta_gatilho: 8000, meta_max: 12000, meta_individual_anual: 120000,
 }
 
+function getCriarProfissionalUrl() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return ''
+  return `${supabaseUrl.replace('.supabase.co', '.functions.supabase.co')}/criar-profissional`
+}
+
 export default function EditarPage() {
   const router = useRouter()
   const [mesSelecionado, setMesSelecionado] = useState('Janeiro')
@@ -44,7 +50,8 @@ export default function EditarPage() {
   const [erroSalvar, setErroSalvar] = useState('')
   const [novoNome, setNovoNome] = useState('')
   const [novoPrimeiroNome, setNovoPrimeiroNome] = useState('')
-  const [novoAuthId, setNovoAuthId] = useState('')
+  const [novoEmail, setNovoEmail] = useState('')
+  const [novaSenha, setNovaSenha] = useState('')
   const [novoRole, setNovoRole] = useState<Role>('user')
   const [adicionando, setAdicionando] = useState(false)
   const [mensagemAdicionar, setMensagemAdicionar] = useState('')
@@ -183,44 +190,60 @@ export default function EditarPage() {
         return
       }
 
-      const id = novoAuthId.trim()
-      const uuidValido = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+      const email = novoEmail.trim().toLowerCase()
+      const senha = novaSenha.trim()
 
-      if (!uuidValido) {
-        setErroSalvar('Informe o ID do usuario criado no Supabase Auth para vincular o acesso individual.')
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setErroSalvar('Informe um e-mail valido para criar o acesso no Supabase Auth.')
+        return
+      }
+
+      if (senha.length < 6) {
+        setErroSalvar('A senha inicial precisa ter pelo menos 6 caracteres.')
+        return
+      }
+
+      const functionUrl = getCriarProfissionalUrl()
+      if (!functionUrl) {
+        setErroSalvar('Configure NEXT_PUBLIC_SUPABASE_URL para criar acessos automaticamente.')
         return
       }
 
       const supabase = createClient()
-      const { error: profileError } = await supabase.from('profiles').upsert(
-        { id, nome, primeiro_nome: primeiroNome, role: novoRole, ativo: true },
-        { onConflict: 'id' }
-      )
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (sessionError || !accessToken) {
+        setErroSalvar('Sessao admin expirada. Entre novamente para criar o acesso.')
+        return
+      }
 
-      if (profileError) throw profileError
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nome,
+          primeiro_nome: primeiroNome,
+          email,
+          password: senha,
+          role: novoRole,
+        }),
+      })
 
-      if (novoRole === 'user') {
-        const { error: resultadosError } = await supabase.from('resultados').upsert(
-          Array.from({ length: 12 }, (_, index) => ({
-            profile_id: id,
-            mes: index + 1,
-            ano: ANO,
-            realizado: 0,
-            comissao_avaliacoes: 0,
-            nota_feedback: 0,
-          })),
-          { onConflict: 'profile_id,mes,ano' }
-        )
-
-        if (resultadosError) throw resultadosError
+      const payload = await response.json().catch(() => ({} as { error?: string }))
+      if (!response.ok) {
+        throw new Error(payload.error || 'Nao foi possivel criar o acesso no Supabase Auth.')
       }
 
       setNovoNome('')
       setNovoPrimeiroNome('')
-      setNovoAuthId('')
+      setNovoEmail('')
+      setNovaSenha('')
       setNovoRole('user')
       setMensagemAdicionar(novoRole === 'user'
-        ? 'Profissional adicionada e liberada nas metas, rankings e painel individual.'
+        ? 'Profissional criada no Supabase Auth, vinculada ao painel e liberada nas metas.'
         : 'Acesso Gestão criado com visualização administrativa sem edição.'
       )
       await carregar(mesSelecionado)
@@ -393,9 +416,9 @@ export default function EditarPage() {
             <form onSubmit={handleAdicionarProfissional} className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Adicionar profissional</h3>
               <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
-                A nova profissional entra ativa, com acesso individual e resultados zerados para seguir as mesmas regras de metas, ranking, bonus e comissoes.
+                Informe nome, e-mail e senha inicial. O acesso no Supabase Auth e o UUID individual serao criados automaticamente.
               </p>
-              <div className="responsive-grid edit-config-grid" style={{ display: 'grid', gridTemplateColumns: DEMO_MODE ? '1.5fr 1fr 0.9fr auto' : '1.2fr 0.8fr 0.9fr 1.4fr auto', gap: 12, alignItems: 'end' }}>
+              <div className="responsive-grid edit-config-grid" style={{ display: 'grid', gridTemplateColumns: DEMO_MODE ? '1.5fr 1fr 0.9fr auto' : '1.1fr 0.8fr 0.8fr 1.1fr 0.9fr auto', gap: 12, alignItems: 'end' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
                     Nome completo
@@ -435,19 +458,34 @@ export default function EditarPage() {
                   </select>
                 </div>
                 {!DEMO_MODE && (
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
-                      ID do usuario no Supabase Auth
-                    </label>
-                    <input
-                      type="text"
-                      className="input-field"
-                      value={novoAuthId}
-                      onChange={e => setNovoAuthId(e.target.value)}
-                      placeholder="UUID do acesso individual"
-                      required
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
+                        E-mail de acesso
+                      </label>
+                      <input
+                        type="email"
+                        className="input-field"
+                        value={novoEmail}
+                        onChange={e => setNovoEmail(e.target.value)}
+                        placeholder="email@clinica.com"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
+                        Senha inicial
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={novaSenha}
+                        onChange={e => setNovaSenha(e.target.value)}
+                        placeholder="Minimo 6 caracteres"
+                        required
+                      />
+                    </div>
+                  </>
                 )}
                 <button type="submit" className="btn-primary" style={{ width: 'auto', padding: '10px 18px' }} disabled={adicionando}>
                   {adicionando ? 'Adicionando...' : 'Adicionar'}
