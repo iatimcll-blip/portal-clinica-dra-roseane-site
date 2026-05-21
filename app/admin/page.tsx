@@ -751,7 +751,7 @@ export default function AdminPage() {
                     <div>
                       <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Mensagem para o Admin</h3>
                       <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)' }}>
-                        Envie uma observação da gestão. A mensagem ficará registrada na aba Mensagens do Google Sheets.
+                        Compartilhe uma observação, dúvida ou alinhamento com a administração. Sua mensagem ficará registrada para acompanhamento.
                       </p>
                     </div>
                     <span className="message-panel-badge">Registro no Sheets</span>
