@@ -314,17 +314,18 @@ export default function PainelProfissional() {
   }, [materiais, profile])
 
   useEffect(() => {
-    const primeiroPdfPendente = materiais.find(material => isPdfMaterial(material) && !leiturasMateriais[material.id])
-    const primeiroPdf = primeiroPdfPendente ?? materiais.find(isPdfMaterial)
+    const materiaisPermitidos = materiais.filter(material => !isFolhaPontoD1(material) || encontrarFolhaDoProfissional(folhasPontoD1, profile)?.material_id === material.id)
+    const primeiroPdfPendente = materiaisPermitidos.find(material => isPdfMaterial(material) && !leiturasMateriais[material.id])
+    const primeiroPdf = primeiroPdfPendente ?? materiaisPermitidos.find(isPdfMaterial)
     if (!primeiroPdf) {
       queueMicrotask(() => setVisualizadorPdf(null))
       return
     }
 
-    if (!visualizadorPdf || !materiais.some(material => material.id === visualizadorPdf.materialId)) {
+    if (!visualizadorPdf || !materiaisPermitidos.some(material => material.id === visualizadorPdf.materialId)) {
       queueMicrotask(() => carregarVisualizacaoPdf(primeiroPdf))
     }
-  }, [materiais, leiturasMateriais, visualizadorPdf]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [materiais, leiturasMateriais, visualizadorPdf, folhasPontoD1, profile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSair() {
     if (DEMO_MODE) {
@@ -487,7 +488,8 @@ export default function PainelProfissional() {
   const faltaMensal = Math.max(0, metaMax - realizado)
   const faltaAnual = Math.max(0, metaAnual - acumuladoAnual)
   const folhaPontoProfissional = encontrarFolhaDoProfissional(folhasPontoD1, profile)
-  const materiaisIndividuais = materiais.filter(material => !isFolhaPontoD1(material) || !folhasPontoD1.length || folhaPontoProfissional?.material_id === material.id)
+  const temMaterialFolhaPontoD1 = materiais.some(isFolhaPontoD1)
+  const materiaisIndividuais = materiais.filter(material => !isFolhaPontoD1(material) || folhaPontoProfissional?.material_id === material.id)
   const materiaisPdf = materiaisIndividuais.filter(isPdfMaterial)
   const materiaisPendentesCiencia = materiaisPdf.filter(material => !leiturasMateriais[material.id])
   const precisaLiberarMateriais = materiaisPendentesCiencia.length > 0
@@ -808,6 +810,12 @@ export default function PainelProfissional() {
           {erroMateriais && (
             <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.16)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#facc15', marginBottom: 14 }}>
               {erroMateriais}
+            </div>
+          )}
+
+          {temMaterialFolhaPontoD1 && !folhaPontoProfissional && !erroFolhaPontoD1 && (
+            <div style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.16)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#7dd3fc', marginBottom: 14 }}>
+              A Folha de Ponto D-1 é liberada de forma individual. Quando o documento for analisado e houver correspondência com seu nome, somente a sua página aparecerá aqui.
             </div>
           )}
 
