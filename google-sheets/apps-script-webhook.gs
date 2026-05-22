@@ -1,6 +1,7 @@
 var ABA_ACESSOS = 'Acessos'
 var ABA_LEITURAS = 'Leituras de Materiais'
 var ABA_MENSAGENS = 'Mensagens'
+var ABA_RESET_SENHAS = 'Reset de Senhas'
 
 var CABECALHO_LEITURAS = [
   'Registrado em',
@@ -26,6 +27,20 @@ var CABECALHO_MENSAGENS = [
   'Mensagem',
   'Destino',
   'Pagina',
+  'Origem',
+  'Navegador',
+]
+
+var CABECALHO_RESET_SENHAS = [
+  'Registrado em',
+  'E-mail solicitado',
+  'Nome profissional',
+  'ID profissional',
+  'Status',
+  'Solicitado por',
+  'Perfil solicitante',
+  'Observação',
+  'Página',
   'Origem',
   'Navegador',
 ]
@@ -126,6 +141,10 @@ function doPost(e) {
       registrarMensagem_(payload, ss)
     }
 
+    if (payload.tipo === 'reset_senha') {
+      registrarResetSenha_(payload, ss)
+    }
+
     return ContentService
       .createTextOutput(JSON.stringify({ ok: true }))
       .setMimeType(ContentService.MimeType.JSON)
@@ -214,6 +233,26 @@ function registrarMensagem_(payload, ss) {
   ])
 }
 
+function registrarResetSenha_(payload, ss) {
+  var planilha = ss || SpreadsheetApp.getActiveSpreadsheet()
+  var sheetReset = getOrCreateSheet_(planilha, ABA_RESET_SENHAS, CABECALHO_RESET_SENHAS)
+
+  prepararColunaDataHora_(sheetReset)
+  sheetReset.appendRow([
+    formatarDataHoraBrasil_(payload.registrado_em),
+    payload.email_profissional || payload.email || '',
+    payload.nome_profissional || '',
+    payload.profile_id_profissional || '',
+    payload.status || '',
+    payload.nome || '',
+    payload.perfil || '',
+    payload.observacao || '',
+    payload.pagina || '',
+    payload.origem || '',
+    payload.user_agent || '',
+  ])
+}
+
 function normalizarChave_(valor) {
   return String(valor || '')
     .normalize('NFD')
@@ -290,6 +329,31 @@ function testarMensagem() {
         mensagem: 'Mensagem de teste para o Admin.',
         destino: 'admin',
         pagina: '/admin',
+        origem: 'teste-manual',
+        user_agent: 'Apps Script',
+      }),
+    },
+  }
+
+  return doPost(e)
+}
+
+function testarResetSenha() {
+  var e = {
+    postData: {
+      contents: JSON.stringify({
+        tipo: 'reset_senha',
+        registrado_em: new Date().toISOString(),
+        email: 'admin@clinica.com',
+        nome: 'Admin',
+        perfil: 'admin',
+        profile_id: '',
+        email_profissional: 'tayane@clinica.com',
+        nome_profissional: 'Tayane Borges De Sousa',
+        profile_id_profissional: 'teste-tayane',
+        status: 'link_enviado',
+        observacao: 'Teste de registro de reset pelo Apps Script.',
+        pagina: '/admin/editar',
         origem: 'teste-manual',
         user_agent: 'Apps Script',
       }),

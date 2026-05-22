@@ -24,6 +24,7 @@ import {
   getDemoResultadosMes,
   salvarDemoMes,
 } from '@/lib/demo-data'
+import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 
 const ANO = 2025
 
@@ -422,6 +423,18 @@ export default function EditarPage() {
 
       if (error) throw error
 
+      registrarEventoGoogleSheets({
+        tipo: 'reset_senha',
+        email,
+        nome: 'Admin',
+        perfil: 'admin',
+        profile_id: null,
+        email_profissional: email,
+        nome_profissional: profile.nome,
+        profile_id_profissional: profile.id,
+        status: 'link_enviado',
+        observacao: 'Reset solicitado pelo painel Admin. A nova senha sera definida pela profissional no link seguro do Supabase.',
+      })
       setMensagemAdicionar(`Link de redefinição de senha enviado para ${email}.`)
     } catch (error) {
       console.error('Erro ao resetar senha', error)

@@ -24,7 +24,16 @@ type MessageEvent = SheetsEventBase & {
   destino?: 'admin'
 }
 
-type SheetsEvent = AccessEvent | MaterialReadEvent | MessageEvent
+type PasswordResetEvent = SheetsEventBase & {
+  tipo: 'reset_senha'
+  email_profissional: string
+  nome_profissional: string
+  profile_id_profissional: string
+  status: string
+  observacao?: string
+}
+
+type SheetsEvent = AccessEvent | MaterialReadEvent | MessageEvent | PasswordResetEvent
 
 const GOOGLE_SHEETS_WEBHOOK_URL = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK_URL
 
