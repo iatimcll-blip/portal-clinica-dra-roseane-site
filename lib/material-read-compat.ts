@@ -101,7 +101,8 @@ function encontrarMaterialPorIdOuTitulo(materiais: MaterialInformativo[], leitur
     if (porId) return porId
   }
 
-  const porArquivo = encontrarMaterialPorTexto(materiais, leitura.material_arquivo ?? '', ['file_name', 'file_path'])
+  const arquivoBase = (leitura.material_arquivo ?? '').split('|')[0]?.trim() ?? ''
+  const porArquivo = encontrarMaterialPorTexto(materiais, arquivoBase || (leitura.material_arquivo ?? ''), ['file_name', 'file_path'])
   if (porArquivo) return porArquivo
 
   const porTitulo = encontrarMaterialPorTitulo(materiais, leitura.material_titulo ?? '')

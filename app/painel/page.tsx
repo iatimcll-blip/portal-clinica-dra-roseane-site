@@ -419,6 +419,19 @@ export default function PainelProfissional() {
       return
     }
 
+    const folhaCiencia = isFolhaPontoD1(material) ? encontrarFolhaDoProfissional(folhasPontoD1, profile) : null
+    if (isFolhaPontoD1(material) && !folhaCiencia) {
+      setErroMateriais('Não foi possível identificar sua página da Folha de Ponto D-1 para registrar a ciência.')
+      return
+    }
+
+    const tituloCiencia = folhaCiencia
+      ? `${material.titulo} - ${folhaCiencia.nome} - página ${folhaCiencia.pagina}`
+      : material.titulo
+    const arquivoCiencia = folhaCiencia
+      ? `${material.file_name} | página ${folhaCiencia.pagina}`
+      : material.file_name
+
     if (DEMO_MODE) {
       const agoraDemo = new Date().toISOString()
       salvarLeituraLocal(profileId, material.id, agoraDemo)
@@ -438,8 +451,8 @@ export default function PainelProfissional() {
       perfil: profile.role,
       profile_id: profileId,
       material_id: material.id,
-      material_titulo: material.titulo,
-      material_arquivo: material.file_name,
+      material_titulo: tituloCiencia,
+      material_arquivo: arquivoCiencia,
       material_categoria: material.categoria,
     })
 

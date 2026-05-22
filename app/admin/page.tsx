@@ -478,6 +478,17 @@ export default function AdminPage() {
 
     const agora = new Date().toISOString()
     const supabase = createClient()
+    const profileGestao = profileIdAtual
+      ? ({ id: profileIdAtual, nome: nomeAtual, primeiro_nome: nomeAtual.split(' ')[0] || nomeAtual, role: perfilAdmin, ativo: true } as const)
+      : null
+    const folhaCiencia = isFolhaPontoD1(material) ? encontrarFolhaDoProfissional(folhasPontoD1, profileGestao) : null
+    const tituloCiencia = folhaCiencia
+      ? `${material.titulo} - ${folhaCiencia.nome} - página ${folhaCiencia.pagina}`
+      : material.titulo
+    const arquivoCiencia = folhaCiencia
+      ? `${material.file_name} | página ${folhaCiencia.pagina}`
+      : material.file_name
+
     salvarLeituraLocal(profileIdAtual, material.id, agora)
     setLeiturasMateriais(prev => {
       const outrasLeituras = prev.filter(leitura => !(leitura.material_id === material.id && leitura.profile_id === profileIdAtual))
@@ -490,8 +501,8 @@ export default function AdminPage() {
       perfil: perfilAdmin,
       profile_id: profileIdAtual,
       material_id: material.id,
-      material_titulo: material.titulo,
-      material_arquivo: material.file_name,
+      material_titulo: tituloCiencia,
+      material_arquivo: arquivoCiencia,
       material_categoria: material.categoria,
     })
 
