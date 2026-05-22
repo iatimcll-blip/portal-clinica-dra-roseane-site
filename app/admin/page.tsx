@@ -578,7 +578,7 @@ export default function AdminPage() {
   const mediaFeedback = notasFeedback.length > 0 ? notasFeedback.reduce((s, nota) => s + nota, 0) / notasFeedback.length : 0
   const abaixoDoGatilho = rankingMensal.filter(p => p.realizado < cfg.meta_gatilho).length
   const pertoDaMeta = rankingMensal.filter(p => p.pctMeta >= 80 && p.pctMeta < 100).length
-  const materiaisObrigatorios = materiais.filter(material => material.ativo && isPdfMaterial(material))
+  const materiaisObrigatorios = materiais.filter(material => material.ativo && isPdfMaterial(material) && !isFolhaPontoD1(material))
   const idsProfissionais = new Set(profiles.map(profile => profile.id))
   const idsMateriaisObrigatorios = new Set(materiaisObrigatorios.map(material => material.id))
   const leiturasContagemSheets = resumoLeiturasGoogle?.leituras ?? []
@@ -604,26 +604,6 @@ export default function AdminPage() {
     folha: encontrarFolhaDoProfissional(folhasPontoD1, profile),
   }))
   const folhasPontoIdentificadas = folhasPontoPorProfissional.filter(item => item.folha).length
-  const materiaisFolhaPontoD1 = materiaisObrigatorios.filter(isFolhaPontoD1)
-  const leiturasFolhaPontoEsperadas = profiles.flatMap(profile =>
-    materiaisFolhaPontoD1
-      .filter(material => encontrarFolhaDoProfissional(folhasPontoD1.filter(folha => folha.material_id === material.id), profile))
-      .map(material => ({ profile, material })),
-  )
-  const totalAssinaturasFolhaPonto = leiturasFolhaPontoEsperadas
-    .filter(item => assinaturasUnicas.has(`${item.profile.id}:${item.material.id}`))
-    .length
-  const profissionaisFolhaPontoCientesLista = profiles.filter(profile => {
-    const materiaisDoProfile = leiturasFolhaPontoEsperadas.filter(item => item.profile.id === profile.id)
-    return materiaisDoProfile.length > 0 && materiaisDoProfile.every(item => assinaturasUnicas.has(`${profile.id}:${item.material.id}`))
-  })
-  const profissionaisFolhaPontoPendentesLista = profiles.filter(profile => {
-    const materiaisDoProfile = leiturasFolhaPontoEsperadas.filter(item => item.profile.id === profile.id)
-    return materiaisDoProfile.length > 0 && !materiaisDoProfile.every(item => assinaturasUnicas.has(`${profile.id}:${item.material.id}`))
-  })
-  const profissionaisSemFolhaPontoLista = profiles.filter(profile =>
-    !leiturasFolhaPontoEsperadas.some(item => item.profile.id === profile.id),
-  )
   const podeEditar = perfilAdmin === 'admin'
   const materiaisVisiveisGestao = materiais.filter(material => material.ativo)
   const leiturasGestao = leiturasMateriais.reduce<Record<number, string>>((acc, leitura) => {
@@ -730,8 +710,7 @@ export default function AdminPage() {
                 { label: 'Feedback medio', valor: mediaFeedback > 0 ? `${mediaFeedback.toFixed(1)}/10` : 'Sem notas', apoio: 'mes selecionado', cor: mediaFeedback >= 8 ? '#4ade80' : mediaFeedback >= 6 ? '#facc15' : '#f87171' },
                 { label: 'Profissionais cientes', valor: contagemSheetsDisponivel && totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : 'Verificar', apoio: contagemSheetsDisponivel ? `${totalLeituras}/${totalLeiturasPossiveis} assinaturas · Google Sheets ${resumoLeiturasGoogle?.totalCompatibilizado ?? 0}` : 'contagem depende do Google Sheets', cor: contagemSheetsDisponivel ? '#38bdf8' : '#facc15' },
                 { label: 'Mensagens recebidas', valor: erroMensagensAdmin ? 'Verificar' : `${totalMensagensRecebidas}`, apoio: erroMensagensAdmin || (ultimaMensagemRecebida?.nome ? `ultima: ${ultimaMensagemRecebida.nome}` : 'aba Mensagens'), cor: erroMensagensAdmin ? '#facc15' : totalMensagensRecebidas > 0 ? '#f472b6' : 'rgba(240,230,255,0.45)' },
-                { label: 'Folha D-1 analisada', valor: erroFolhaPontoD1 ? 'Verificar' : `${folhasPontoIdentificadas}/${profiles.length}`, apoio: erroFolhaPontoD1 || 'horas por profissional', cor: erroFolhaPontoD1 ? '#facc15' : folhasPontoIdentificadas === profiles.length && profiles.length > 0 ? '#4ade80' : '#38bdf8' },
-                { label: 'Ciência Folha D-1', valor: contagemSheetsDisponivel && leiturasFolhaPontoEsperadas.length > 0 ? `${profissionaisFolhaPontoCientesLista.length}/${leiturasFolhaPontoEsperadas.length > 0 ? new Set(leiturasFolhaPontoEsperadas.map(item => item.profile.id)).size : 0}` : 'Verificar', apoio: contagemSheetsDisponivel ? `${totalAssinaturasFolhaPonto}/${leiturasFolhaPontoEsperadas.length} assinaturas D-1` : 'contagem depende do Google Sheets', cor: contagemSheetsDisponivel ? '#38bdf8' : '#facc15' },
+                { label: 'Folha D-1 analisada', valor: erroFolhaPontoD1 ? 'Verificar' : `${folhasPontoIdentificadas}/${profiles.length}`, apoio: erroFolhaPontoD1 || 'consulta individual, sem ciência', cor: erroFolhaPontoD1 ? '#facc15' : folhasPontoIdentificadas === profiles.length && profiles.length > 0 ? '#4ade80' : '#38bdf8' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm executive-card" style={{ padding: 18 }}>
                   <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 8 }}>{c.label}</div>
@@ -766,47 +745,6 @@ export default function AdminPage() {
                           </>
                         ) : (
                           <p>A contagem de ciência será exibida somente após resposta do Google Sheets.</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {c.label === 'Ciência Folha D-1' && (
-                    <div className="awareness-popover-trigger" tabIndex={0} aria-label="Ver ciência da Folha de Ponto D-1">
-                      Ver nomes
-                      <div className="awareness-popover">
-                        {contagemSheetsDisponivel ? (
-                          <>
-                            <div>
-                              <div className="awareness-popover-title">Assinaram Folha D-1</div>
-                              {profissionaisFolhaPontoCientesLista.length > 0 ? (
-                                <ul>
-                                  {profissionaisFolhaPontoCientesLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
-                                </ul>
-                              ) : (
-                                <p>Nenhuma profissional assinou a Folha D-1 ainda.</p>
-                              )}
-                            </div>
-                            <div>
-                              <div className="awareness-popover-title pending">Faltam assinar Folha D-1</div>
-                              {profissionaisFolhaPontoPendentesLista.length > 0 ? (
-                                <ul>
-                                  {profissionaisFolhaPontoPendentesLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
-                                </ul>
-                              ) : (
-                                <p>Todas as profissionais com folha identificada assinaram.</p>
-                              )}
-                            </div>
-                            {profissionaisSemFolhaPontoLista.length > 0 && (
-                              <div>
-                                <div className="awareness-popover-title pending">Sem folha identificada</div>
-                                <ul>
-                                  {profissionaisSemFolhaPontoLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
-                                </ul>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <p>A contagem da Folha D-1 será exibida somente após resposta do Google Sheets.</p>
                         )}
                       </div>
                     </div>
@@ -942,12 +880,13 @@ export default function AdminPage() {
                         <div className="material-category-title">{categoria}</div>
                         {itens.map(material => {
                           const lidoEm = leiturasGestao[material.id]
+                          const dispensaCiencia = isFolhaPontoD1(material)
                           return (
                           <div key={material.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
                             <div style={{ minWidth: 220, flex: '1 1 260px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                 <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
-                                {lidoEm && <span className="material-read-badge">Ciente</span>}
+                                {dispensaCiencia ? <span className="material-read-badge">Consulta individual</span> : lidoEm && <span className="material-read-badge">Ciente</span>}
                               </div>
                               {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
                               <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
@@ -971,7 +910,11 @@ export default function AdminPage() {
                               >
                                 {isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
                               </button>
-                              {lidoEm ? (
+                              {dispensaCiencia ? (
+                                <div className="material-read-confirmed">
+                                  Sem ciência obrigatória
+                                </div>
+                              ) : lidoEm ? (
                                 <div className="material-read-confirmed">
                                   Termo já assinado em {new Date(lidoEm).toLocaleDateString('pt-BR')}
                                 </div>
@@ -1299,7 +1242,7 @@ export default function AdminPage() {
                           <td style={{ padding: 16 }}><span className="material-category-badge">{categoriaDoMaterial(material)}</span></td>
                           <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{material.file_name}</td>
                           <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.5)', whiteSpace: 'nowrap' }}>{formatFileSize(material.file_size)}</td>
-                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{totalLeiturasMaterial(material.id)}/{profiles.length} cientes</td>
+                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{isFolhaPontoD1(material) ? 'Não exige ciência' : `${totalLeiturasMaterial(material.id)}/${profiles.length} cientes`}</td>
                           <td style={{ padding: 16 }}><span className={material.ativo ? 'badge-acima' : 'badge-abaixo'}>{material.ativo ? 'Visível' : 'Oculto'}</span></td>
                           <td style={{ padding: 16, whiteSpace: 'nowrap' }}>
                             <button type="button" onClick={() => handleAbrirMaterial(material)} style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.24)', color: '#7dd3fc', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8 }}>

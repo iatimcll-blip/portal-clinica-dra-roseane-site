@@ -521,7 +521,7 @@ export default function PainelProfissional() {
   const folhaPontoProfissional = encontrarFolhaDoProfissional(folhasPontoD1, profile)
   const temMaterialFolhaPontoD1 = materiais.some(isFolhaPontoD1)
   const materiaisIndividuais = materiais.filter(material => !isFolhaPontoD1(material) || folhaPontoProfissional?.material_id === material.id)
-  const materiaisPdf = materiaisIndividuais.filter(isPdfMaterial)
+  const materiaisPdf = materiaisIndividuais.filter(material => isPdfMaterial(material) && !isFolhaPontoD1(material))
   const materiaisPendentesCiencia = materiaisPdf.filter(material => !leiturasMateriais[material.id])
   const precisaLiberarMateriais = materiaisPendentesCiencia.length > 0
   const podeVisualizarDados = !precisaLiberarMateriais
@@ -856,6 +856,7 @@ export default function PainelProfissional() {
                 <div className="material-category-title">{categoria}</div>
                 {itens.map(material => {
                   const lidoEm = leiturasMateriais[material.id]
+                  const dispensaCiencia = isFolhaPontoD1(material)
                   const materialAberto = visualizadorPdf?.materialId === material.id
                   const chegouAoFinal = Boolean(materialAberto && totalPaginasPdf > 0 && visualizadorPdf && visualizadorPdf.pagina >= totalPaginasPdf)
                   const podeConfirmarCiencia = Boolean(lidoEm) || chegouAoFinal
@@ -864,7 +865,7 @@ export default function PainelProfissional() {
                       <div style={{ minWidth: 220, flex: '1 1 260px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
-                          {lidoEm && <span className="material-read-badge">Ciente</span>}
+                          {dispensaCiencia ? <span className="material-read-badge">Consulta individual</span> : lidoEm && <span className="material-read-badge">Ciente</span>}
                         </div>
                         {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
                         <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
@@ -888,7 +889,11 @@ export default function PainelProfissional() {
                         >
                           {isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
                         </button>
-                        {lidoEm ? (
+                        {dispensaCiencia ? (
+                          <div className="material-read-confirmed">
+                            Sem ciência obrigatória
+                          </div>
+                        ) : lidoEm ? (
                           <div className="material-read-confirmed">
                             Termo já assinado em {new Date(lidoEm).toLocaleDateString('pt-BR')}
                           </div>
