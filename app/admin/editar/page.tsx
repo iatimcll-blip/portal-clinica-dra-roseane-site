@@ -442,7 +442,10 @@ export default function EditarPage() {
         },
       })
 
-      if (error) throw error
+      const funcaoIndisponivel = Boolean(error)
+      if (error && !String(error.message ?? '').toLowerCase().includes('not found')) {
+        console.warn('Reset de senha via Edge Function falhou; registrando senha no Sheets como pendente.', error)
+      }
 
       registrarEventoGoogleSheets({
         tipo: 'reset_senha',
@@ -454,13 +457,18 @@ export default function EditarPage() {
         nome_profissional: profile.nome,
         profile_id_profissional: profile.id,
         senha_temporaria: senhaTemporaria,
-        status: 'senha_atualizada',
-        observacao: 'Senha temporaria definida pelo painel Admin e registrada no Google Sheets.',
+        status: funcaoIndisponivel ? 'senha_registrada_no_sheets' : 'senha_atualizada',
+        observacao: funcaoIndisponivel
+          ? 'Senha temporaria registrada no Google Sheets. Para valer no login, publique a Edge Function resetar-senha-profissional ou atualize a senha no Supabase Auth.'
+          : 'Senha temporaria definida pelo painel Admin e registrada no Google Sheets.',
       })
-      setMensagemAdicionar(`Senha temporária atualizada para ${profile.nome} e enviada ao Google Sheets.`)
+      setMensagemAdicionar(funcaoIndisponivel
+        ? `Senha temporária registrada no Google Sheets para ${profile.nome}. A função do Supabase ainda precisa ser publicada para alterar o login automaticamente.`
+        : `Senha temporária atualizada para ${profile.nome} e enviada ao Google Sheets.`
+      )
     } catch (error) {
       console.error('Erro ao resetar senha', error)
-      setErroSalvar('Não foi possível alterar a senha no Supabase. Publique a Edge Function resetar-senha-profissional e tente novamente.')
+      setErroSalvar('Não foi possível registrar a senha temporária. Verifique o Apps Script do Google Sheets e tente novamente.')
     } finally {
       setAdicionando(false)
     }
