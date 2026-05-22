@@ -15,7 +15,17 @@ import {
 } from '@/lib/formulas'
 import type { Profile, ConfiguracoesMes, MaterialInformativo, MaterialLeitura } from '@/lib/types'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
-import { buscarLeiturasMateriaisGoogleSheets, enviarMensagemGoogleSheets, registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
+import {
+  buscarAutoavaliacaoConfigGoogleSheets,
+  buscarAutoavaliacaoRespostasGoogleSheets,
+  buscarLeiturasMateriaisGoogleSheets,
+  enviarAutoavaliacaoGoogleSheets,
+  enviarMensagemGoogleSheets,
+  registrarEventoGoogleSheets,
+  type AutoavaliacaoConfig,
+  type AutoavaliacaoResposta,
+} from '@/lib/google-sheets-sync'
+import { AUTOAVALIACAO_CAMPOS_TEXTO, AUTOAVALIACAO_PERGUNTAS, calcularMediaAutoavaliacao } from '@/lib/autoavaliacao'
 import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
 import { listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
@@ -113,6 +123,13 @@ export default function PainelProfissional() {
   const [mensagemAdmin, setMensagemAdmin] = useState('')
   const [statusMensagemAdmin, setStatusMensagemAdmin] = useState('')
   const [enviandoMensagemAdmin, setEnviandoMensagemAdmin] = useState(false)
+  const [autoavaliacaoConfig, setAutoavaliacaoConfig] = useState<AutoavaliacaoConfig | null>(null)
+  const [autoavaliacaoResposta, setAutoavaliacaoResposta] = useState<AutoavaliacaoResposta | null>(null)
+  const [notasAutoavaliacao, setNotasAutoavaliacao] = useState<Record<string, number>>({})
+  const [textosAutoavaliacao, setTextosAutoavaliacao] = useState<Record<string, string>>({})
+  const [desempenhoGeral, setDesempenhoGeral] = useState(0)
+  const [statusAutoavaliacao, setStatusAutoavaliacao] = useState('')
+  const [enviandoAutoavaliacao, setEnviandoAutoavaliacao] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string, currentProfile: Profile) => {
@@ -246,6 +263,27 @@ export default function PainelProfissional() {
 
     setLeiturasMateriais(leiturasCombinadas)
     setErroMateriais(erroMateriaisAtual)
+
+    try {
+      const [configAuto, respostasAuto] = await Promise.all([
+        buscarAutoavaliacaoConfigGoogleSheets(),
+        buscarAutoavaliacaoRespostasGoogleSheets(),
+      ])
+      const respostaAtual = respostasAuto.find(resposta =>
+        resposta.profile_id === uid && resposta.periodo === configAuto.periodo,
+      ) ?? null
+
+      setAutoavaliacaoConfig(configAuto)
+      setAutoavaliacaoResposta(respostaAtual)
+      setNotasAutoavaliacao(respostaAtual?.notas ?? {})
+      setTextosAutoavaliacao(respostaAtual?.textos ?? {})
+      setDesempenhoGeral(respostaAtual?.desempenho_geral ?? 0)
+      setStatusAutoavaliacao('')
+    } catch {
+      setAutoavaliacaoConfig(null)
+      setAutoavaliacaoResposta(null)
+      setStatusAutoavaliacao('Autoavaliação indisponível no momento. Atualize o Apps Script para habilitar o formulário digital.')
+    }
   }, [])
 
   useEffect(() => {
@@ -501,6 +539,42 @@ export default function PainelProfissional() {
     }
   }
 
+  async function enviarAutoavaliacao(event: React.SyntheticEvent) {
+    event.preventDefault()
+    if (!profileId || !profile || !autoavaliacaoConfig?.liberado) return
+
+    const perguntasSemNota = AUTOAVALIACAO_PERGUNTAS.filter(pergunta => !notasAutoavaliacao[pergunta.id])
+    if (perguntasSemNota.length > 0 || !desempenhoGeral) {
+      setStatusAutoavaliacao('Selecione uma nota de 1 a 10 para todos os critérios e para o desempenho geral.')
+      return
+    }
+
+    setEnviandoAutoavaliacao(true)
+    setStatusAutoavaliacao('')
+
+    const payload = {
+      periodo: autoavaliacaoConfig.periodo,
+      email: profileEmail,
+      nome: profile.nome,
+      perfil: profile.role,
+      profile_id: profileId,
+      media: calcularMediaAutoavaliacao(notasAutoavaliacao),
+      desempenho_geral: desempenhoGeral,
+      notas: notasAutoavaliacao,
+      textos: textosAutoavaliacao,
+    }
+
+    try {
+      await enviarAutoavaliacaoGoogleSheets(payload)
+      setAutoavaliacaoResposta({ ...payload, registrado_em: new Date().toISOString() })
+      setStatusAutoavaliacao('Autoavaliação enviada e registrada no Google Sheets.')
+    } catch {
+      setStatusAutoavaliacao('Não foi possível registrar a autoavaliação no Google Sheets. Verifique o Apps Script e tente novamente.')
+    } finally {
+      setEnviandoAutoavaliacao(false)
+    }
+  }
+
   function categoriaDoMaterial(material: MaterialInformativo) {
     return material.categoria || 'Comunicados'
   }
@@ -532,6 +606,12 @@ export default function PainelProfissional() {
     return acc
   }, {})
   const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${YOUTUBE_UPLOADS_PLAYLIST_ID}&index=${youtubeVideoIndex}&autoplay=1&mute=${youtubeMuted ? '1' : '0'}&playsinline=1&rel=0&controls=1`
+  const gruposAutoavaliacao = AUTOAVALIACAO_PERGUNTAS.reduce<Record<string, typeof AUTOAVALIACAO_PERGUNTAS>>((acc, pergunta) => {
+    acc[pergunta.grupo] = [...(acc[pergunta.grupo] ?? []), pergunta]
+    return acc
+  }, {})
+  const autoavaliacaoLiberada = Boolean(autoavaliacaoConfig?.liberado && autoavaliacaoConfig.periodo)
+  const autoavaliacaoMedia = calcularMediaAutoavaliacao(notasAutoavaliacao)
 
   if (loading || !profile) {
     return (
@@ -976,6 +1056,103 @@ export default function PainelProfissional() {
             </div>
           )}
         </div>
+        {autoavaliacaoLiberada && (
+          <div id="painel-autoavaliacao" className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 18 }}>
+              <div>
+                <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Autoavaliação de Desempenho</h3>
+                <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)' }}>
+                  Formulário liberado para {autoavaliacaoConfig?.periodo}. Responda de forma reflexiva e registre seus pontos de evolução.
+                </p>
+              </div>
+              <span className="message-panel-badge">
+                {autoavaliacaoResposta ? 'Enviada' : 'Pendente'}
+              </span>
+            </div>
+
+            <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 18 }}>
+              {[
+                ['Nome', profile.nome],
+                ['Função', profile.role === 'user' ? 'Esteticista' : profile.role],
+                ['Período avaliado', autoavaliacaoConfig?.periodo ?? '-'],
+              ].map(([label, valor]) => (
+                <div key={label} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,0.03)' }}>
+                  <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#f0e6ff' }}>{valor}</div>
+                </div>
+              ))}
+            </div>
+
+            {autoavaliacaoResposta ? (
+              <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.18)', borderRadius: 12, padding: 14, color: '#86efac', fontSize: 13, marginBottom: 18 }}>
+                Autoavaliação já registrada para este período. Média dos critérios: <strong>{autoavaliacaoResposta.media.toFixed(1)}/10</strong>.
+              </div>
+            ) : (
+              <form onSubmit={enviarAutoavaliacao} style={{ display: 'grid', gap: 18 }}>
+                {Object.entries(gruposAutoavaliacao).map(([grupo, perguntas]) => (
+                  <section key={grupo} style={{ display: 'grid', gap: 10 }}>
+                    <div className="material-category-title">{grupo}</div>
+                    {perguntas.map(pergunta => (
+                      <div key={pergunta.id} className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 12, alignItems: 'center', padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ fontSize: 13, color: '#f0e6ff', lineHeight: 1.5 }}>{pergunta.texto}</div>
+                        <select
+                          className="input-field"
+                          value={notasAutoavaliacao[pergunta.id] ?? ''}
+                          onChange={event => setNotasAutoavaliacao(prev => ({ ...prev, [pergunta.id]: Number(event.target.value) }))}
+                        >
+                          <option value="" style={{ background: '#1a0a2e' }}>Nota</option>
+                          {Array.from({ length: 10 }, (_, index) => index + 1).map(nota => (
+                            <option key={nota} value={nota} style={{ background: '#1a0a2e' }}>{nota}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </section>
+                ))}
+
+                <section style={{ display: 'grid', gap: 12 }}>
+                  <div className="material-category-title">Reflexões e desenvolvimento</div>
+                  {AUTOAVALIACAO_CAMPOS_TEXTO.map(campo => (
+                    <label key={campo.id} style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: 12, color: 'rgba(240,230,255,0.55)' }}>{campo.label}</span>
+                      <textarea
+                        className="input-field message-textarea"
+                        value={textosAutoavaliacao[campo.id] ?? ''}
+                        onChange={event => setTextosAutoavaliacao(prev => ({ ...prev, [campo.id]: event.target.value }))}
+                        placeholder="Digite sua resposta..."
+                        style={{ minHeight: 86 }}
+                      />
+                    </label>
+                  ))}
+                </section>
+
+                <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 130px 160px', gap: 12, alignItems: 'end' }}>
+                  <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.6)' }}>
+                    Média parcial dos critérios: <strong style={{ color: '#f472b6' }}>{autoavaliacaoMedia.toFixed(1)}/10</strong>
+                  </div>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontSize: 12, color: 'rgba(240,230,255,0.55)' }}>Nota geral</span>
+                    <select className="input-field" value={desempenhoGeral || ''} onChange={event => setDesempenhoGeral(Number(event.target.value))}>
+                      <option value="" style={{ background: '#1a0a2e' }}>Nota</option>
+                      {Array.from({ length: 10 }, (_, index) => index + 1).map(nota => (
+                        <option key={nota} value={nota} style={{ background: '#1a0a2e' }}>{nota}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button type="submit" className="btn-primary" disabled={enviandoAutoavaliacao}>
+                    {enviandoAutoavaliacao ? 'Enviando...' : 'Enviar avaliação'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {statusAutoavaliacao && (
+              <div className="message-panel-status" style={{ marginTop: 14 }}>
+                {statusAutoavaliacao}
+              </div>
+            )}
+          </div>
+        )}
         <div id="painel-mensagem-admin" className="glass-sm message-panel" style={{ padding: 24, marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 14 }}>
             <div>
@@ -1016,6 +1193,7 @@ export default function PainelProfissional() {
         <a href="#painel-resumo">Painel</a>
         <a href="#painel-metas">Metas</a>
         <a href="#painel-materiais">Materiais</a>
+        <a href="#painel-autoavaliacao">Avaliação</a>
         <a href="#painel-mensagem-admin">Mensagem</a>
         <a href="#painel-senha">Senha</a>
       </nav>

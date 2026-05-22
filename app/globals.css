@@ -746,6 +746,16 @@ body {
     grid-template-columns: 1fr !important;
   }
 
+  .admin-autoavaliacao-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-autoavaliacao-layout > div:first-child {
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
   .summary-grid,
   .professional-kpi-grid,
   .bonus-total-grid,

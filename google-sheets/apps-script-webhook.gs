@@ -2,6 +2,8 @@ var ABA_ACESSOS = 'Acessos'
 var ABA_LEITURAS = 'Leituras de Materiais'
 var ABA_MENSAGENS = 'Mensagens'
 var ABA_RESET_SENHAS = 'Reset de Senhas'
+var ABA_AUTOAVALIACAO_CONFIG = 'Autoavaliacao Config'
+var ABA_AUTOAVALIACAO_RESPOSTAS = 'Autoavaliacao Respostas'
 
 var CABECALHO_LEITURAS = [
   'Registrado em',
@@ -46,6 +48,29 @@ var CABECALHO_RESET_SENHAS = [
   'Navegador',
 ]
 
+var CABECALHO_AUTOAVALIACAO_CONFIG = [
+  'Atualizado em',
+  'Liberado',
+  'Periodo',
+  'Origem',
+  'Navegador',
+]
+
+var CABECALHO_AUTOAVALIACAO_RESPOSTAS = [
+  'Registrado em',
+  'Periodo',
+  'E-mail',
+  'Nome',
+  'Perfil',
+  'ID do perfil',
+  'Media criterios',
+  'Desempenho geral',
+  'Notas JSON',
+  'Respostas JSON',
+  'Origem',
+  'Navegador',
+]
+
 function doGet(e) {
   try {
     var tipo = e && e.parameter ? e.parameter.tipo : ''
@@ -57,6 +82,28 @@ function doGet(e) {
       registrarMensagem_(payloadMensagem)
 
       return responderJson_({ ok: true, data: { status: 'mensagem_registrada' } }, callback)
+    }
+
+    if (acao === 'autoavaliacao_config') {
+      var payloadConfig = JSON.parse(e.parameter.payload || '{}')
+      atualizarAutoavaliacaoConfig_(payloadConfig)
+
+      return responderJson_({ ok: true, data: { status: 'autoavaliacao_config_atualizada' } }, callback)
+    }
+
+    if (acao === 'registrar_autoavaliacao') {
+      var payloadAutoavaliacao = JSON.parse(e.parameter.payload || '{}')
+      registrarAutoavaliacao_(payloadAutoavaliacao)
+
+      return responderJson_({ ok: true, data: { status: 'autoavaliacao_registrada' } }, callback)
+    }
+
+    if (tipo === 'autoavaliacao_config') {
+      return responderJson_({ ok: true, data: obterAutoavaliacaoConfig_() }, callback)
+    }
+
+    if (tipo === 'autoavaliacao_respostas') {
+      return responderJson_({ ok: true, data: listarAutoavaliacoes_() }, callback)
     }
 
     if (tipo === 'mensagens') {
@@ -144,6 +191,14 @@ function doPost(e) {
 
     if (payload.tipo === 'reset_senha') {
       registrarResetSenha_(payload, ss)
+    }
+
+    if (payload.tipo === 'autoavaliacao_resposta') {
+      registrarAutoavaliacao_(payload, ss)
+    }
+
+    if (payload.tipo === 'autoavaliacao_config') {
+      atualizarAutoavaliacaoConfig_(payload, ss)
     }
 
     return ContentService
@@ -253,6 +308,110 @@ function registrarResetSenha_(payload, ss) {
     payload.origem || '',
     payload.user_agent || '',
   ])
+}
+
+function obterAutoavaliacaoConfig_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var sheetConfig = getOrCreateSheet_(ss, ABA_AUTOAVALIACAO_CONFIG, CABECALHO_AUTOAVALIACAO_CONFIG)
+  var lastRow = sheetConfig.getLastRow()
+
+  if (lastRow < 2) {
+    return {
+      liberado: false,
+      periodo: '',
+    }
+  }
+
+  var row = sheetConfig.getRange(lastRow, 1, 1, CABECALHO_AUTOAVALIACAO_CONFIG.length).getValues()[0]
+  return {
+    liberado: String(row[1] || '').toLowerCase() === 'sim',
+    periodo: String(row[2] || ''),
+    liberado_em: String(row[0] || ''),
+  }
+}
+
+function atualizarAutoavaliacaoConfig_(payload, ss) {
+  var planilha = ss || SpreadsheetApp.getActiveSpreadsheet()
+  var sheetConfig = getOrCreateSheet_(planilha, ABA_AUTOAVALIACAO_CONFIG, CABECALHO_AUTOAVALIACAO_CONFIG)
+
+  prepararColunaDataHora_(sheetConfig)
+  sheetConfig.appendRow([
+    formatarDataHoraBrasil_(payload.registrado_em),
+    payload.liberado ? 'Sim' : 'Nao',
+    payload.periodo || '',
+    payload.origem || '',
+    payload.user_agent || '',
+  ])
+}
+
+function registrarAutoavaliacao_(payload, ss) {
+  var planilha = ss || SpreadsheetApp.getActiveSpreadsheet()
+  var sheetRespostas = getOrCreateSheet_(planilha, ABA_AUTOAVALIACAO_RESPOSTAS, CABECALHO_AUTOAVALIACAO_RESPOSTAS)
+
+  prepararColunaDataHora_(sheetRespostas)
+  removerAutoavaliacaoAnterior_(sheetRespostas, payload)
+  sheetRespostas.appendRow([
+    formatarDataHoraBrasil_(payload.registrado_em),
+    payload.periodo || '',
+    payload.email || '',
+    payload.nome || '',
+    payload.perfil || '',
+    payload.profile_id || '',
+    payload.media || '',
+    payload.desempenho_geral || '',
+    JSON.stringify(payload.notas || {}),
+    JSON.stringify(payload.textos || {}),
+    payload.origem || '',
+    payload.user_agent || '',
+  ])
+}
+
+function removerAutoavaliacaoAnterior_(sheet, payload) {
+  var lastRow = sheet.getLastRow()
+  if (lastRow < 2) return
+
+  var profileId = String(payload.profile_id || '')
+  var periodo = String(payload.periodo || '')
+  var rows = sheet.getRange(2, 2, lastRow - 1, 5).getValues()
+
+  for (var i = rows.length - 1; i >= 0; i -= 1) {
+    var rowPeriodo = String(rows[i][0] || '')
+    var rowProfileId = String(rows[i][4] || '')
+    if (rowPeriodo === periodo && rowProfileId === profileId) {
+      sheet.deleteRow(i + 2)
+    }
+  }
+}
+
+function listarAutoavaliacoes_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var sheetRespostas = getOrCreateSheet_(ss, ABA_AUTOAVALIACAO_RESPOSTAS, CABECALHO_AUTOAVALIACAO_RESPOSTAS)
+  var lastRow = sheetRespostas.getLastRow()
+  if (lastRow < 2) return []
+
+  var rows = sheetRespostas.getRange(2, 1, lastRow - 1, CABECALHO_AUTOAVALIACAO_RESPOSTAS.length).getValues()
+  return rows.map(function(row) {
+    return {
+      registrado_em: String(row[0] || ''),
+      periodo: String(row[1] || ''),
+      email: String(row[2] || ''),
+      nome: String(row[3] || ''),
+      perfil: String(row[4] || ''),
+      profile_id: String(row[5] || ''),
+      media: Number(row[6] || 0),
+      desempenho_geral: Number(row[7] || 0),
+      notas: parseJsonSeguro_(row[8]),
+      textos: parseJsonSeguro_(row[9]),
+    }
+  }).reverse()
+}
+
+function parseJsonSeguro_(valor) {
+  try {
+    return JSON.parse(String(valor || '{}'))
+  } catch (error) {
+    return {}
+  }
 }
 
 function normalizarChave_(valor) {

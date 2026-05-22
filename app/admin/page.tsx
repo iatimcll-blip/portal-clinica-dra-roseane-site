@@ -16,7 +16,19 @@ import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
-import { buscarLeiturasMateriaisGoogleSheets, buscarMensagensGoogleSheets, enviarMensagemGoogleSheets, registrarEventoGoogleSheets, type GoogleSheetsMessageRow } from '@/lib/google-sheets-sync'
+import {
+  atualizarAutoavaliacaoConfigGoogleSheets,
+  buscarAutoavaliacaoConfigGoogleSheets,
+  buscarAutoavaliacaoRespostasGoogleSheets,
+  buscarLeiturasMateriaisGoogleSheets,
+  buscarMensagensGoogleSheets,
+  enviarMensagemGoogleSheets,
+  registrarEventoGoogleSheets,
+  type AutoavaliacaoConfig,
+  type AutoavaliacaoResposta,
+  type GoogleSheetsMessageRow,
+} from '@/lib/google-sheets-sync'
+import { AUTOAVALIACAO_CAMPOS_TEXTO, AUTOAVALIACAO_PERGUNTAS } from '@/lib/autoavaliacao'
 import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
 import { criarCaminhoMaterialStorage, listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
@@ -28,7 +40,7 @@ import {
   type FolhaPontoD1,
 } from '@/lib/ponto-d1'
 
-type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais'
+type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais' | 'autoavaliacao'
 type PerfilAdmin = 'admin' | 'gestao'
 
 const BUCKET_MATERIAIS = 'materiais-informativos'
@@ -93,6 +105,12 @@ export default function AdminPage() {
   const [statusMensagemGestao, setStatusMensagemGestao] = useState('')
   const [enviandoMensagemGestao, setEnviandoMensagemGestao] = useState(false)
   const [erroMensagensAdmin, setErroMensagensAdmin] = useState('')
+  const [autoavaliacaoConfig, setAutoavaliacaoConfig] = useState<AutoavaliacaoConfig>({ liberado: false, periodo: '' })
+  const [periodoAutoavaliacao, setPeriodoAutoavaliacao] = useState('')
+  const [autoavaliacaoRespostas, setAutoavaliacaoRespostas] = useState<AutoavaliacaoResposta[]>([])
+  const [autoavaliacaoProfileId, setAutoavaliacaoProfileId] = useState('')
+  const [statusAutoavaliacaoAdmin, setStatusAutoavaliacaoAdmin] = useState('')
+  const [salvandoAutoavaliacaoAdmin, setSalvandoAutoavaliacaoAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const mesNum = mesNumero(mesSelecionado)
@@ -113,6 +131,9 @@ export default function AdminPage() {
       setProfileIdAtual('')
       setEmailAtual('')
       setNomeAtual('')
+      setAutoavaliacaoConfig({ liberado: false, periodo: '' })
+      setPeriodoAutoavaliacao('')
+      setAutoavaliacaoRespostas([])
       setLoading(false)
       return
     }
@@ -222,7 +243,20 @@ export default function AdminPage() {
       .catch(() => {
         setResumoLeiturasGoogle(null)
       })
-  }, [mesNum, router])
+
+    Promise.all([buscarAutoavaliacaoConfigGoogleSheets(), buscarAutoavaliacaoRespostasGoogleSheets()])
+      .then(([configAuto, respostasAuto]) => {
+        setAutoavaliacaoConfig(configAuto)
+        setPeriodoAutoavaliacao(configAuto.periodo || `Avaliação ${mesSelecionado} 2025`)
+        setAutoavaliacaoRespostas(respostasAuto)
+        setStatusAutoavaliacaoAdmin('')
+        setAutoavaliacaoProfileId(atual => atual || (profs?.[0]?.id ?? ''))
+      })
+      .catch(() => {
+        setAutoavaliacaoRespostas([])
+        setStatusAutoavaliacaoAdmin('Atualize o Apps Script para habilitar a liberação e leitura das autoavaliações.')
+      })
+  }, [mesNum, mesSelecionado, router])
 
   useEffect(() => { queueMicrotask(() => { carregarDados() }) }, [carregarDados])
 
@@ -551,6 +585,30 @@ export default function AdminPage() {
     }
   }
 
+  async function salvarLiberacaoAutoavaliacao(liberado: boolean) {
+    const periodo = periodoAutoavaliacao.trim()
+    if (liberado && !periodo) {
+      setStatusAutoavaliacaoAdmin('Informe o período da avaliação antes de liberar o formulário.')
+      return
+    }
+
+    setSalvandoAutoavaliacaoAdmin(true)
+    setStatusAutoavaliacaoAdmin('')
+
+    try {
+      await atualizarAutoavaliacaoConfigGoogleSheets({ liberado, periodo })
+      const novaConfig = { liberado, periodo, liberado_em: new Date().toISOString() }
+      setAutoavaliacaoConfig(novaConfig)
+      setStatusAutoavaliacaoAdmin(liberado
+        ? 'Formulário de autoavaliação liberado para as profissionais.'
+        : 'Formulário de autoavaliação encerrado.')
+    } catch {
+      setStatusAutoavaliacaoAdmin('Não foi possível atualizar a liberação no Google Sheets. Verifique o Apps Script.')
+    } finally {
+      setSalvandoAutoavaliacaoAdmin(false)
+    }
+  }
+
   function trocarVideoYoutube(delta: number) {
     setYoutubeVideoIndex(atual => Math.min(Math.max(atual + delta, 0), YOUTUBE_PLAYLIST_LIMIT - 1))
   }
@@ -600,6 +658,20 @@ export default function AdminPage() {
   const profissionaisComCienciaCompleta = profissionaisComCienciaCompletaLista.length
   const totalMensagensRecebidas = mensagensRecebidas.length
   const ultimaMensagemRecebida = mensagensRecebidas[0]
+  const autoavaliacaoPeriodoAtual = autoavaliacaoConfig.periodo || periodoAutoavaliacao
+  const respostasAutoavaliacaoPeriodo = autoavaliacaoRespostas.filter(resposta =>
+    !autoavaliacaoPeriodoAtual || resposta.periodo === autoavaliacaoPeriodoAtual,
+  )
+  const respostasAutoavaliacaoPorProfile = new Map(respostasAutoavaliacaoPeriodo.map(resposta => [resposta.profile_id, resposta]))
+  const profissionaisComAutoavaliacao = profiles.filter(profile => respostasAutoavaliacaoPorProfile.has(profile.id))
+  const profissionalAutoavaliacaoSelecionado = profiles.find(profile => profile.id === autoavaliacaoProfileId) ?? profiles[0] ?? null
+  const respostaAutoavaliacaoSelecionada = profissionalAutoavaliacaoSelecionado
+    ? respostasAutoavaliacaoPorProfile.get(profissionalAutoavaliacaoSelecionado.id)
+    : undefined
+  const perguntasPorGrupoAutoavaliacao = AUTOAVALIACAO_PERGUNTAS.reduce<Record<string, typeof AUTOAVALIACAO_PERGUNTAS>>((acc, pergunta) => {
+    acc[pergunta.grupo] = [...(acc[pergunta.grupo] ?? []), pergunta]
+    return acc
+  }, {})
   const folhasPontoPorProfissional = profiles.map(profile => ({
     profile,
     folha: encontrarFolhaDoProfissional(folhasPontoD1, profile),
@@ -986,7 +1058,7 @@ export default function AdminPage() {
 
             {/* Tabs */}
             <div className="tabs-scroll" style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-              {([['mensal','📅 Ranking Mensal'],['anual','🏆 Ranking Anual'],['bonus','💰 Bônus e Comissões'],['materiais','📎 Materiais']] as const).map(([t, label]) => (
+              {([['mensal','📅 Ranking Mensal'],['anual','🏆 Ranking Anual'],['bonus','💰 Bônus e Comissões'],['materiais','📎 Materiais'],['autoavaliacao','📝 Autoavaliação']] as const).map(([t, label]) => (
                 <button key={t} onClick={() => setAba(t)} style={{
                   padding: '8px 18px', borderRadius: 10, border: 'none', cursor: 'pointer',
                   background: aba === t ? 'linear-gradient(135deg,#be185d,#7c3aed)' : 'rgba(255,255,255,0.05)',
@@ -1266,6 +1338,146 @@ export default function AdminPage() {
                       )}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {aba === 'autoavaliacao' && (
+              <div className="glass-sm" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
+                <div style={{ padding: '18px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 700 }}>📝 Autoavaliação de Desempenho</h2>
+                  <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.4)', marginTop: 4 }}>
+                    Libere o formulário digital no período de avaliação e acompanhe as respostas por profissional.
+                  </p>
+                </div>
+
+                <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'end' }}>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: 12, color: 'rgba(240,230,255,0.55)' }}>Período da avaliação</span>
+                      <input
+                        className="input-field"
+                        value={periodoAutoavaliacao}
+                        onChange={event => setPeriodoAutoavaliacao(event.target.value)}
+                        placeholder="Ex.: Maio/2026"
+                        disabled={!podeEditar}
+                      />
+                    </label>
+                    <button type="button" className="btn-primary" onClick={() => salvarLiberacaoAutoavaliacao(true)} disabled={!podeEditar || salvandoAutoavaliacaoAdmin}>
+                      Liberar formulário
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => salvarLiberacaoAutoavaliacao(false)}
+                      disabled={!podeEditar || salvandoAutoavaliacaoAdmin}
+                      style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)', color: '#fca5a5', borderRadius: 10, padding: '12px 16px', fontSize: 13, fontWeight: 800, cursor: podeEditar ? 'pointer' : 'not-allowed' }}
+                    >
+                      Encerrar
+                    </button>
+                  </div>
+
+                  <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 16 }}>
+                    {[
+                      { label: 'Status', valor: autoavaliacaoConfig.liberado ? 'Liberado' : 'Encerrado', cor: autoavaliacaoConfig.liberado ? '#4ade80' : '#facc15' },
+                      { label: 'Período ativo', valor: autoavaliacaoConfig.periodo || 'Não definido', cor: '#c084fc' },
+                      { label: 'Respostas recebidas', valor: `${profissionaisComAutoavaliacao.length}/${profiles.length}`, cor: '#38bdf8' },
+                    ].map(item => (
+                      <div key={item.label} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,0.03)' }}>
+                        <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginBottom: 4 }}>{item.label}</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: item.cor }}>{item.valor}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {statusAutoavaliacaoAdmin && (
+                    <div className="message-panel-status" style={{ marginTop: 14 }}>
+                      {statusAutoavaliacaoAdmin}
+                    </div>
+                  )}
+                  {!podeEditar && (
+                    <div style={{ marginTop: 14, fontSize: 13, color: 'rgba(240,230,255,0.5)' }}>
+                      Perfil Gestão: visualização liberada sem permissão para liberar ou encerrar avaliações.
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 0 }} className="admin-autoavaliacao-layout">
+                  <div style={{ padding: 18, borderRight: '1px solid rgba(255,255,255,0.06)', display: 'grid', gap: 8, alignContent: 'start' }}>
+                    {profiles.map(profile => {
+                      const respondida = respostasAutoavaliacaoPorProfile.has(profile.id)
+                      return (
+                        <button
+                          key={profile.id}
+                          type="button"
+                          onClick={() => setAutoavaliacaoProfileId(profile.id)}
+                          style={{
+                            textAlign: 'left',
+                            border: '1px solid rgba(255,255,255,0.06)',
+                            borderRadius: 10,
+                            padding: 12,
+                            background: profissionalAutoavaliacaoSelecionado?.id === profile.id ? 'rgba(244,114,182,0.14)' : 'rgba(255,255,255,0.03)',
+                            color: '#f0e6ff',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{ fontSize: 13, fontWeight: 800 }}>{profile.nome}</div>
+                          <div style={{ fontSize: 11, color: respondida ? '#86efac' : 'rgba(240,230,255,0.42)', marginTop: 4 }}>
+                            {respondida ? 'Respondida' : 'Pendente'}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div style={{ padding: 24 }}>
+                    {!profissionalAutoavaliacaoSelecionado ? (
+                      <div style={{ color: 'rgba(240,230,255,0.4)', fontSize: 14 }}>Nenhuma profissional cadastrada.</div>
+                    ) : !respostaAutoavaliacaoSelecionada ? (
+                      <div style={{ color: 'rgba(240,230,255,0.5)', fontSize: 14 }}>
+                        {profissionalAutoavaliacaoSelecionado.nome} ainda não enviou a autoavaliação para {autoavaliacaoPeriodoAtual || 'o período selecionado'}.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 18 }}>
+                        <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                          {[
+                            ['Profissional', respostaAutoavaliacaoSelecionada.nome],
+                            ['Período', respostaAutoavaliacaoSelecionada.periodo],
+                            ['Média critérios', `${respostaAutoavaliacaoSelecionada.media.toFixed(1)}/10`],
+                            ['Nota geral', `${respostaAutoavaliacaoSelecionada.desempenho_geral}/10`],
+                          ].map(([label, valor]) => (
+                            <div key={label} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,0.03)' }}>
+                              <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginBottom: 4 }}>{label}</div>
+                              <div style={{ fontSize: 15, fontWeight: 900, color: '#f0e6ff' }}>{valor}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {Object.entries(perguntasPorGrupoAutoavaliacao).map(([grupo, perguntas]) => (
+                          <section key={grupo} style={{ display: 'grid', gap: 8 }}>
+                            <div className="material-category-title">{grupo}</div>
+                            {perguntas.map(pergunta => (
+                              <div key={pergunta.id} style={{ display: 'grid', gridTemplateColumns: '1fr 70px', gap: 12, padding: 10, borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.82)' }}>{pergunta.texto}</div>
+                                <div style={{ fontSize: 13, fontWeight: 900, color: '#f472b6', textAlign: 'right' }}>{respostaAutoavaliacaoSelecionada.notas[pergunta.id] ?? '-'}/10</div>
+                              </div>
+                            ))}
+                          </section>
+                        ))}
+
+                        <section style={{ display: 'grid', gap: 10 }}>
+                          <div className="material-category-title">Respostas abertas</div>
+                          {AUTOAVALIACAO_CAMPOS_TEXTO.map(campo => (
+                            <div key={campo.id} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,0.03)' }}>
+                              <div style={{ fontSize: 12, color: '#c084fc', fontWeight: 800, marginBottom: 6 }}>{campo.label}</div>
+                              <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.75)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                                {respostaAutoavaliacaoSelecionada.textos[campo.id] || 'Sem resposta.'}
+                              </div>
+                            </div>
+                          ))}
+                        </section>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

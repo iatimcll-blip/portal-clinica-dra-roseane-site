@@ -76,6 +76,38 @@ export type GoogleSheetsMessagePayload = {
   destino?: 'admin'
 }
 
+export type AutoavaliacaoConfig = {
+  liberado: boolean
+  periodo: string
+  liberado_em?: string
+  encerrado_em?: string
+}
+
+export type AutoavaliacaoResposta = {
+  registrado_em?: string
+  periodo: string
+  email?: string
+  nome: string
+  perfil?: string
+  profile_id: string
+  media: number
+  desempenho_geral: number
+  notas: Record<string, number>
+  textos: Record<string, string>
+}
+
+export type AutoavaliacaoPayload = {
+  periodo: string
+  email?: string | null
+  nome: string
+  perfil?: string | null
+  profile_id: string
+  media: number
+  desempenho_geral: number
+  notas: Record<string, number>
+  textos: Record<string, string>
+}
+
 export function registrarEventoGoogleSheets(evento: SheetsEvent) {
   if (!GOOGLE_SHEETS_WEBHOOK_URL || typeof window === 'undefined') return
 
@@ -180,6 +212,81 @@ export function buscarMensagensGoogleSheets(): Promise<GoogleSheetsMessageRow[]>
 
     document.body.appendChild(script)
   })
+}
+
+function buscarJsonpGoogleSheets<T>(params: Record<string, string>, timeoutMs = 8000): Promise<T> {
+  if (!GOOGLE_SHEETS_WEBHOOK_URL || typeof window === 'undefined') return Promise.reject(new Error('Webhook do Google Sheets nao configurado.'))
+
+  return new Promise((resolve, reject) => {
+    const callbackName = `googleSheets_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    const script = document.createElement('script')
+    const timeout = window.setTimeout(() => {
+      cleanup()
+      reject(new Error('Tempo esgotado ao consultar o Google Sheets.'))
+    }, timeoutMs)
+
+    function cleanup() {
+      window.clearTimeout(timeout)
+      script.remove()
+      delete (window as unknown as Record<string, unknown>)[callbackName]
+    }
+
+    ;(window as unknown as Record<string, (payload: JsonpResponse<T>) => void>)[callbackName] = payload => {
+      cleanup()
+      if (!payload?.ok) {
+        reject(new Error(payload?.error || 'Nao foi possivel consultar o Google Sheets.'))
+        return
+      }
+      resolve(payload.data as T)
+    }
+
+    const url = new URL(GOOGLE_SHEETS_WEBHOOK_URL)
+    Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value))
+    url.searchParams.set('callback', callbackName)
+    script.src = url.toString()
+    script.onerror = () => {
+      cleanup()
+      reject(new Error('Nao foi possivel carregar o retorno do Google Sheets.'))
+    }
+
+    document.body.appendChild(script)
+  })
+}
+
+export function buscarAutoavaliacaoConfigGoogleSheets(): Promise<AutoavaliacaoConfig> {
+  return buscarJsonpGoogleSheets<AutoavaliacaoConfig>({ tipo: 'autoavaliacao_config' })
+}
+
+export function buscarAutoavaliacaoRespostasGoogleSheets(): Promise<AutoavaliacaoResposta[]> {
+  return buscarJsonpGoogleSheets<AutoavaliacaoResposta[]>({ tipo: 'autoavaliacao_respostas' })
+}
+
+export function atualizarAutoavaliacaoConfigGoogleSheets(config: Pick<AutoavaliacaoConfig, 'liberado' | 'periodo'>): Promise<void> {
+  return buscarJsonpGoogleSheets<{ status?: string }>({
+    acao: 'autoavaliacao_config',
+    payload: JSON.stringify({
+      ...config,
+      tipo: 'autoavaliacao_config',
+      origem: 'portal-clinica',
+      registrado_em: new Date().toISOString(),
+      pagina: window.location.pathname,
+      user_agent: window.navigator.userAgent,
+    }),
+  }).then(() => undefined)
+}
+
+export function enviarAutoavaliacaoGoogleSheets(resposta: AutoavaliacaoPayload): Promise<void> {
+  return buscarJsonpGoogleSheets<{ status?: string }>({
+    acao: 'registrar_autoavaliacao',
+    payload: JSON.stringify({
+      tipo: 'autoavaliacao_resposta',
+      ...resposta,
+      origem: 'portal-clinica',
+      registrado_em: new Date().toISOString(),
+      pagina: window.location.pathname,
+      user_agent: window.navigator.userAgent,
+    }),
+  }).then(() => undefined)
 }
 
 export function enviarMensagemGoogleSheets(mensagem: GoogleSheetsMessagePayload): Promise<void> {
