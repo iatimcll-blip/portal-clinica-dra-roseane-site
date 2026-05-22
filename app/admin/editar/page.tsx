@@ -376,6 +376,61 @@ export default function EditarPage() {
     }
   }
 
+  function emailSugerido(profile: Profile) {
+    const primeiroNome = profile.primeiro_nome
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+
+    return primeiroNome ? `${primeiroNome}@clinica.com` : ''
+  }
+
+  function getRecoveryUrl() {
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
+    return `${window.location.origin}${basePath}/redefinir-senha/`
+  }
+
+  async function resetarSenhaProfissional(profile: Profile) {
+    setErroSalvar('')
+    setMensagemAdicionar('')
+
+    if (DEMO_MODE) {
+      setMensagemAdicionar('Reset de senha indisponível no modo demonstração.')
+      return
+    }
+
+    const email = window.prompt(
+      `Informe o e-mail de acesso de ${profile.nome} para enviar o link de redefinição de senha:`,
+      emailSugerido(profile),
+    )?.trim().toLowerCase()
+
+    if (!email) return
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErroSalvar('Informe um e-mail válido para enviar o reset de senha.')
+      return
+    }
+
+    setAdicionando(true)
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: getRecoveryUrl(),
+      })
+
+      if (error) throw error
+
+      setMensagemAdicionar(`Link de redefinição de senha enviado para ${email}.`)
+    } catch (error) {
+      console.error('Erro ao resetar senha', error)
+      setErroSalvar('Não foi possível enviar o reset de senha. Verifique o e-mail e as configurações de Auth do Supabase.')
+    } finally {
+      setAdicionando(false)
+    }
+  }
+
   async function handleSair() {
     if (DEMO_MODE) {
       router.push('/login')
@@ -631,6 +686,10 @@ export default function EditarPage() {
                                 <button type="button" onClick={() => iniciarEdicaoProfissional(prof)}
                                   style={{ background: 'rgba(192,132,252,0.12)', border: '1px solid rgba(192,132,252,0.22)', color: '#e9d5ff', borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>
                                   Editar
+                                </button>
+                                <button type="button" onClick={() => resetarSenhaProfissional(prof)} disabled={adicionando}
+                                  style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.24)', color: '#7dd3fc', borderRadius: 8, padding: '6px 9px', cursor: adicionando ? 'not-allowed' : 'pointer', fontSize: 12 }}>
+                                  Reset senha
                                 </button>
                                 {confirmandoExclusaoId === prof.id ? (
                                   <>
