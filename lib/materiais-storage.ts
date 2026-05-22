@@ -59,6 +59,16 @@ function tituloDeSlug(slug: string) {
     .join(' ')
 }
 
+function pareceFolhaPonto(...valores: string[]) {
+  const texto = valores
+    .join(' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+
+  return texto.includes('FOLHA') && texto.includes('PONTO')
+}
+
 function materialDeArquivoStorage(arquivo: StorageFile): MaterialInformativo {
   const partes = arquivo.name.split('__')
   const temMetadados = partes[0] === PREFIXO_MATERIAL_STORAGE && partes.length >= 5
@@ -66,12 +76,16 @@ function materialDeArquivoStorage(arquivo: StorageFile): MaterialInformativo {
   const tituloSlug = temMetadados ? partes[4] : ''
   const nomeOriginal = temMetadados ? partes.slice(5).join('__') : arquivo.name
   const criadoEm = arquivo.created_at ?? arquivo.updated_at ?? new Date(idDoArquivo(arquivo.name)).toISOString()
+  const titulo = temMetadados ? tituloDeSlug(tituloSlug) : nomeOriginal
+  const categoria = pareceFolhaPonto(categoriaSlug, tituloSlug, nomeOriginal, arquivo.name)
+    ? 'Folha de Ponto D-1'
+    : CATEGORIAS_CONHECIDAS[categoriaSlug] ?? 'Comunicados'
 
   return {
     id: idDoArquivo(arquivo.name),
-    titulo: temMetadados ? tituloDeSlug(tituloSlug) : nomeOriginal,
+    titulo,
     descricao: null,
-    categoria: CATEGORIAS_CONHECIDAS[categoriaSlug] ?? 'Comunicados',
+    categoria,
     file_name: nomeOriginal,
     file_path: arquivo.name,
     file_type: arquivo.metadata?.mimetype ?? null,
@@ -101,4 +115,3 @@ export async function listarMateriaisDoStorage(supabase: SupabaseClient, bucket:
     .map(materialDeArquivoStorage)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 }
-

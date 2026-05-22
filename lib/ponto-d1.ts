@@ -34,8 +34,16 @@ export function normalizarNomePonto(valor: string) {
     .toUpperCase()
 }
 
-export function isFolhaPontoD1(material: Pick<MaterialInformativo, 'categoria'>) {
-  return normalizarNomePonto(material.categoria ?? '') === normalizarNomePonto(CATEGORIA_FOLHA_PONTO_D1)
+export function isFolhaPontoD1(material: Pick<MaterialInformativo, 'categoria'> & Partial<Pick<MaterialInformativo, 'titulo' | 'file_name' | 'file_path'>>) {
+  const textos = [
+    material.categoria,
+    material.titulo,
+    material.file_name,
+    material.file_path,
+  ].map(valor => normalizarNomePonto(valor ?? ''))
+
+  return textos.some(texto => texto === normalizarNomePonto(CATEGORIA_FOLHA_PONTO_D1))
+    || textos.some(texto => texto.includes('FOLHA') && texto.includes('PONTO'))
 }
 
 function minutosDeHora(valor: string) {

@@ -204,13 +204,19 @@ export default function PainelProfissional() {
     setTotalClinicaMes(painel?.total_clinica ?? 0)
     let materiaisCarregados = materiaisData ?? []
     let erroMateriaisAtual = materiaisError ? 'Materiais informativos ainda não configurados no Supabase.' : ''
-    if (materiaisError) {
-      try {
-        materiaisCarregados = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
+    try {
+      const materiaisStorage = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
+      if (materiaisStorage.length > 0) {
+        const materiaisPorCaminho = new Map<string, MaterialInformativo>()
+        ;[...materiaisCarregados, ...materiaisStorage].forEach(material => {
+          materiaisPorCaminho.set(material.file_path, material)
+        })
+        materiaisCarregados = Array.from(materiaisPorCaminho.values())
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         erroMateriaisAtual = ''
-      } catch {
-        materiaisCarregados = []
       }
+    } catch {
+      if (materiaisError) materiaisCarregados = []
     }
 
     setMateriais(materiaisCarregados)

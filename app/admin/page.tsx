@@ -149,13 +149,19 @@ export default function AdminPage() {
 
     let materiaisCarregados = mats ?? []
     let erroMateriaisAtual = matsError ? mensagemErroMateriais(matsError.message, matsError.code) : ''
-    if (matsError) {
-      try {
-        materiaisCarregados = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
+    try {
+      const materiaisStorage = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
+      if (materiaisStorage.length > 0) {
+        const materiaisPorCaminho = new Map<string, MaterialInformativo>()
+        ;[...materiaisCarregados, ...materiaisStorage].forEach(material => {
+          materiaisPorCaminho.set(material.file_path, material)
+        })
+        materiaisCarregados = Array.from(materiaisPorCaminho.values())
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         erroMateriaisAtual = ''
-      } catch {
-        materiaisCarregados = []
       }
+    } catch {
+      if (matsError) materiaisCarregados = []
     }
 
     setProfiles(profs ?? [])
