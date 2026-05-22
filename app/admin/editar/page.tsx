@@ -387,11 +387,6 @@ export default function EditarPage() {
     return primeiroNome ? `${primeiroNome}@clinica.com` : ''
   }
 
-  function getRecoveryUrl() {
-    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
-    return `${window.location.origin}${basePath}/redefinir-senha/`
-  }
-
   async function resetarSenhaProfissional(profile: Profile) {
     setErroSalvar('')
     setMensagemAdicionar('')
@@ -402,7 +397,7 @@ export default function EditarPage() {
     }
 
     const email = window.prompt(
-      `Informe o e-mail de acesso de ${profile.nome} para enviar o link de redefinição de senha:`,
+      `Informe o e-mail de acesso de ${profile.nome}:`,
       emailSugerido(profile),
     )?.trim().toLowerCase()
 
@@ -413,12 +408,38 @@ export default function EditarPage() {
       return
     }
 
+    const senhaTemporaria = window.prompt(
+      `Informe a nova senha temporária para ${profile.nome}. Ela será enviada para a aba Reset de Senhas do Google Sheets:`,
+      `${profile.primeiro_nome.replace(/\s+/g, '')}@2026!`,
+    )?.trim()
+
+    if (!senhaTemporaria) return
+
+    if (senhaTemporaria.length < 6) {
+      setErroSalvar('A senha temporária precisa ter pelo menos 6 caracteres.')
+      return
+    }
+
     setAdicionando(true)
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: getRecoveryUrl(),
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (sessionError || !accessToken) {
+        setErroSalvar('Sessão admin expirada. Entre novamente para alterar a senha.')
+        return
+      }
+
+      const { error } = await supabase.functions.invoke('resetar-senha-profissional', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: {
+          profile_id: profile.id,
+          email,
+          password: senhaTemporaria,
+        },
       })
 
       if (error) throw error
@@ -432,13 +453,14 @@ export default function EditarPage() {
         email_profissional: email,
         nome_profissional: profile.nome,
         profile_id_profissional: profile.id,
-        status: 'link_enviado',
-        observacao: 'Reset solicitado pelo painel Admin. A nova senha sera definida pela profissional no link seguro do Supabase.',
+        senha_temporaria: senhaTemporaria,
+        status: 'senha_atualizada',
+        observacao: 'Senha temporaria definida pelo painel Admin e registrada no Google Sheets.',
       })
-      setMensagemAdicionar(`Link de redefinição de senha enviado para ${email}.`)
+      setMensagemAdicionar(`Senha temporária atualizada para ${profile.nome} e enviada ao Google Sheets.`)
     } catch (error) {
       console.error('Erro ao resetar senha', error)
-      setErroSalvar('Não foi possível enviar o reset de senha. Verifique o e-mail e as configurações de Auth do Supabase.')
+      setErroSalvar('Não foi possível alterar a senha no Supabase. Publique a Edge Function resetar-senha-profissional e tente novamente.')
     } finally {
       setAdicionando(false)
     }

@@ -29,6 +29,7 @@ type PasswordResetEvent = SheetsEventBase & {
   email_profissional: string
   nome_profissional: string
   profile_id_profissional: string
+  senha_temporaria?: string
   status: string
   observacao?: string
 }
