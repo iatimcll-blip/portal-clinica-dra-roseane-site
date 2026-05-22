@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import { createClient } from '@/lib/supabase/client'
@@ -32,40 +31,6 @@ type ValorProf = { profile_id: string; realizado: number; comissao: number; feed
 
 const CONFIG_PADRAO: ConfiguracoesMes = {
   id: 0, mes: 1, ano: ANO, meta_clinica: 80000, meta_gatilho: 8000, meta_max: 12000, meta_individual_anual: 120000,
-}
-
-async function criarUsuarioAuthPorSignup(email: string, password: string, nome: string, primeiroNome: string, role: Role) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!url || !anonKey) {
-    throw new Error('Supabase real nao configurado para criar o acesso.')
-  }
-
-  const authClient = createSupabaseClient(url, anonKey, {
-    auth: {
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      persistSession: false,
-      storageKey: `admin-create-${Date.now()}`,
-    },
-  })
-
-  const { data, error } = await authClient.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { nome, primeiro_nome: primeiroNome, role },
-    },
-  })
-
-  if (error) throw error
-  if (!data.user?.id || data.user.identities?.length === 0) {
-    throw new Error('Este e-mail ja existe no Supabase Auth ou nao retornou um UUID valido.')
-  }
-
-  await authClient.auth.signOut()
-  return data.user.id
 }
 
 export default function EditarPage() {
@@ -241,7 +206,6 @@ export default function EditarPage() {
         return
       }
 
-      let criadoPorFallback = false
       const { error: functionError } = await supabase.functions.invoke('criar-profissional', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -256,31 +220,7 @@ export default function EditarPage() {
       })
 
       if (functionError) {
-        criadoPorFallback = true
-        const id = await criarUsuarioAuthPorSignup(email, senha, nome, primeiroNome, novoRole)
-
-        const { error: profileError } = await supabase.from('profiles').upsert(
-          { id, nome, primeiro_nome: primeiroNome, role: novoRole, ativo: true },
-          { onConflict: 'id' }
-        )
-
-        if (profileError) throw profileError
-
-        if (novoRole === 'user') {
-          const { error: resultadosError } = await supabase.from('resultados').upsert(
-            Array.from({ length: 12 }, (_, index) => ({
-              profile_id: id,
-              mes: index + 1,
-              ano: ANO,
-              realizado: 0,
-              comissao_avaliacoes: 0,
-              nota_feedback: 0,
-            })),
-            { onConflict: 'profile_id,mes,ano' }
-          )
-
-          if (resultadosError) throw resultadosError
-        }
+        throw new Error('A função criar-profissional não está publicada no Supabase. O acesso não foi criado para evitar e-mail sem confirmação. Publique a Edge Function e tente novamente.')
       }
 
       setNovoNome('')
@@ -288,10 +228,9 @@ export default function EditarPage() {
       setNovoEmail('')
       setNovaSenha('')
       setNovoRole('user')
-      const origemCriacao = criadoPorFallback ? ' pelo fluxo alternativo de Auth' : ''
       setMensagemAdicionar(novoRole === 'user'
-        ? `Profissional criada${origemCriacao}, vinculada ao painel e liberada nas metas.`
-        : `Acesso Gestão criado${origemCriacao} com visualização administrativa sem edição.`
+        ? 'Profissional criada no Supabase Auth com e-mail confirmado, vinculada ao painel e liberada nas metas.'
+        : 'Acesso Gestão criado no Supabase Auth com e-mail confirmado e visualização administrativa sem edição.'
       )
       await carregar(mesSelecionado)
     } catch (error) {
