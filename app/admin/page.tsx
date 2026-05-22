@@ -18,6 +18,7 @@ import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
 import { buscarLeiturasMateriaisGoogleSheets, buscarMensagensGoogleSheets, enviarMensagemGoogleSheets, registrarEventoGoogleSheets, type GoogleSheetsMessageRow } from '@/lib/google-sheets-sync'
 import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
+import { criarCaminhoMaterialStorage, listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import {
   CATEGORIA_FOLHA_PONTO_D1,
   encontrarFolhaDoProfissional,
@@ -146,12 +147,23 @@ export default function AdminPage() {
       supabase.from('materiais_informativos').select('*').order('created_at', { ascending: false }),
     ])
 
+    let materiaisCarregados = mats ?? []
+    let erroMateriaisAtual = matsError ? mensagemErroMateriais(matsError.message, matsError.code) : ''
+    if (matsError) {
+      try {
+        materiaisCarregados = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
+        erroMateriaisAtual = ''
+      } catch {
+        materiaisCarregados = []
+      }
+    }
+
     setProfiles(profs ?? [])
     setConfig(cfg ?? null)
     setResultados(res ?? [])
     setTodosResultados(anuais ?? [])
-    setMateriais(mats ?? [])
-    setErroMaterial(matsError ? mensagemErroMateriais(matsError.message, matsError.code) : '')
+    setMateriais(materiaisCarregados)
+    setErroMaterial(erroMateriaisAtual)
 
     const [leiturasResult, auditoriaResult] = await Promise.allSettled([
       supabase.from('materiais_leituras').select('material_id, profile_id, read_at'),
@@ -187,7 +199,7 @@ export default function AdminPage() {
 
     buscarLeiturasMateriaisGoogleSheets()
       .then(linhasGoogle => {
-        const resumoGoogle = compatibilizarLeiturasGoogleSheets(profs ?? [], mats ?? [], linhasGoogle)
+        const resumoGoogle = compatibilizarLeiturasGoogleSheets(profs ?? [], materiaisCarregados, linhasGoogle)
         setResumoLeiturasGoogle(resumoGoogle)
         setErroMaterial(erroAtual =>
           erroAtual.includes('contagem de aceites') ? '' : erroAtual,
@@ -288,14 +300,14 @@ export default function AdminPage() {
   }
 
   function mensagemErroMateriais(message?: string, code?: string) {
-    if (code === 'PGRST205' || message?.toLowerCase().includes('materiais_informativos')) {
+    if (message?.toLowerCase().includes('row-level security')) {
+      return 'O Supabase bloqueou a ação pelas regras de acesso. O sistema tentará usar o armazenamento alternativo para liberar o material.'
+    }
+    if (code === 'PGRST205') {
       return 'A área de materiais ainda não foi criada no Supabase. Execute o arquivo supabase/fix_materiais_informativos.sql no SQL Editor.'
     }
     if (message?.toLowerCase().includes('bucket not found')) {
       return 'O armazenamento de materiais ainda não foi criado no Supabase. Execute o arquivo supabase/fix_materiais_informativos.sql no SQL Editor.'
-    }
-    if (message?.toLowerCase().includes('row-level security')) {
-      return 'O Supabase bloqueou a ação pelas regras de acesso. Reaplique o arquivo supabase/fix_materiais_informativos.sql no SQL Editor.'
     }
     return 'Não foi possível acessar os materiais informativos agora.'
   }
@@ -348,11 +360,7 @@ export default function AdminPage() {
     setSalvandoMaterial(true)
     const supabase = createClient()
     const titulo = tituloMaterial.trim() || arquivoMaterial.name
-    const nomeSeguro = arquivoMaterial.name
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9._-]/g, '-')
-    const filePath = `${Date.now()}-${crypto.randomUUID()}-${nomeSeguro}`
+    const filePath = criarCaminhoMaterialStorage(arquivoMaterial, categoriaMaterial, titulo)
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_MATERIAIS)
@@ -379,8 +387,13 @@ export default function AdminPage() {
     })
 
     if (insertError) {
-      await supabase.storage.from(BUCKET_MATERIAIS).remove([filePath])
-      setErroMaterial(mensagemErroMateriais(insertError.message, insertError.code))
+      setMateriais(await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS))
+      setTituloMaterial('')
+      setDescricaoMaterial('')
+      setCategoriaMaterial(CATEGORIAS_MATERIAIS[0])
+      setArquivoMaterial(null)
+      setMensagemMaterial('Material anexado pelo armazenamento alternativo. A Folha D-1 será analisada por nome e liberada individualmente.')
+      setErroMaterial('')
       setSalvandoMaterial(false)
       return
     }
@@ -398,12 +411,7 @@ export default function AdminPage() {
     if (!confirm(`Remover o material "${material.titulo}"?`)) return
 
     const supabase = createClient()
-    const { error: registroError } = await supabase.from('materiais_informativos').delete().eq('id', material.id)
-    if (registroError) {
-      setErroMaterial('Não foi possível remover o material.')
-      return
-    }
-
+    await supabase.from('materiais_informativos').delete().eq('id', material.id)
     await supabase.storage.from(BUCKET_MATERIAIS).remove([material.file_path])
     setMensagemMaterial('Material removido.')
     await carregarDados()

@@ -17,6 +17,7 @@ import type { Profile, ConfiguracoesMes, MaterialInformativo, MaterialLeitura } 
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
 import { buscarLeiturasMateriaisGoogleSheets, enviarMensagemGoogleSheets, registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
+import { listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import {
   encontrarFolhaDoProfissional,
   extrairFolhasPontoD1DePdf,
@@ -201,7 +202,18 @@ export default function PainelProfissional() {
     setPosicao(painel?.posicao_mensal ?? 1)
     setPosicaoAnual(painel?.posicao_anual ?? 1)
     setTotalClinicaMes(painel?.total_clinica ?? 0)
-    setMateriais(materiaisData ?? [])
+    let materiaisCarregados = materiaisData ?? []
+    let erroMateriaisAtual = materiaisError ? 'Materiais informativos ainda não configurados no Supabase.' : ''
+    if (materiaisError) {
+      try {
+        materiaisCarregados = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
+        erroMateriaisAtual = ''
+      } catch {
+        materiaisCarregados = []
+      }
+    }
+
+    setMateriais(materiaisCarregados)
     const leiturasDoBanco = ((leiturasData ?? []) as MaterialLeitura[]).reduce<Record<number, string>>((acc, leitura) => {
       acc[leitura.material_id] = leitura.read_at
       return acc
@@ -211,7 +223,7 @@ export default function PainelProfissional() {
     try {
       const leiturasGoogle = await buscarLeiturasMateriaisGoogleSheets()
       if (leiturasGoogle.length > 0) {
-        const resumo = compatibilizarLeiturasGoogleSheets([currentProfile], materiaisData ?? [], leiturasGoogle)
+        const resumo = compatibilizarLeiturasGoogleSheets([currentProfile], materiaisCarregados, leiturasGoogle)
         const leiturasDoSheets = resumo.leituras.reduce<Record<number, string>>((acc, leitura) => {
           if (leitura.profile_id === uid) {
             acc[leitura.material_id] = leitura.read_at
@@ -226,7 +238,7 @@ export default function PainelProfissional() {
     }
 
     setLeiturasMateriais(leiturasCombinadas)
-    setErroMateriais(materiaisError ? 'Materiais informativos ainda não configurados no Supabase.' : '')
+    setErroMateriais(erroMateriaisAtual)
   }, [])
 
   useEffect(() => {
