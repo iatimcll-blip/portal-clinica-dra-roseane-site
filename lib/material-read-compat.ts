@@ -51,6 +51,26 @@ function distanciaEdicao(a: string, b: string) {
   return matriz[a.length][b.length]
 }
 
+function encontrarMaterialPorTexto(materiais: MaterialInformativo[], texto: string, campos: Array<keyof Pick<MaterialInformativo, 'titulo' | 'file_name' | 'file_path' | 'categoria'>>) {
+  const textoNormalizado = normalizarChave(texto)
+  if (!textoNormalizado) return undefined
+
+  const exato = materiais.find(material => campos.some(campo => normalizarChave(material[campo]) === textoNormalizado))
+  if (exato) return exato
+
+  const textoSolto = normalizarSolto(texto)
+  if (!textoSolto) return undefined
+
+  return materiais.find(material => campos.some(campo => {
+    const materialSolto = normalizarSolto(material[campo])
+    if (!materialSolto) return false
+    if (materialSolto.includes(textoSolto) || textoSolto.includes(materialSolto)) return true
+
+    const limite = Math.max(1, Math.floor(Math.max(materialSolto.length, textoSolto.length) * 0.08))
+    return distanciaEdicao(materialSolto, textoSolto) <= limite
+  }))
+}
+
 function encontrarMaterialPorTitulo(materiais: MaterialInformativo[], titulo: string) {
   const tituloNormalizado = normalizarChave(titulo)
   const exato = materiais.find(material => normalizarChave(material.titulo) === tituloNormalizado)
@@ -69,14 +89,30 @@ function encontrarMaterialPorTitulo(materiais: MaterialInformativo[], titulo: st
   })
 }
 
-function encontrarMaterialPorIdOuTitulo(materiais: MaterialInformativo[], materialId?: number | string, titulo?: string) {
-  const idNumerico = Number(materialId)
+function pareceFolhaPonto(...valores: Array<string | undefined>) {
+  const texto = normalizarChave(valores.filter(Boolean).join(' '))
+  return texto.includes('folha') && texto.includes('ponto')
+}
+
+function encontrarMaterialPorIdOuTitulo(materiais: MaterialInformativo[], leitura: GoogleSheetsMaterialRead) {
+  const idNumerico = Number(leitura.material_id)
   if (Number.isFinite(idNumerico)) {
     const porId = materiais.find(material => material.id === idNumerico)
     if (porId) return porId
   }
 
-  return encontrarMaterialPorTitulo(materiais, titulo ?? '')
+  const porArquivo = encontrarMaterialPorTexto(materiais, leitura.material_arquivo ?? '', ['file_name', 'file_path'])
+  if (porArquivo) return porArquivo
+
+  const porTitulo = encontrarMaterialPorTitulo(materiais, leitura.material_titulo ?? '')
+  if (porTitulo) return porTitulo
+
+  if (pareceFolhaPonto(leitura.categoria, leitura.material_titulo, leitura.material_arquivo)) {
+    const folhas = materiais.filter(material => pareceFolhaPonto(material.categoria ?? undefined, material.titulo, material.file_name, material.file_path))
+    if (folhas.length === 1) return folhas[0]
+  }
+
+  return undefined
 }
 
 function encontrarProfilePorIdOuNome(profiles: Profile[], profissionaisPorNome: Map<string, Profile>, profileId?: string, nome?: string) {
@@ -109,7 +145,7 @@ export function compatibilizarLeiturasGoogleSheets(
     }
 
     const profile = encontrarProfilePorIdOuNome(profiles, profissionaisPorNome, leitura.profile_id, leitura.nome)
-    const material = encontrarMaterialPorIdOuTitulo(materiais, leitura.material_id, leitura.material_titulo)
+    const material = encontrarMaterialPorIdOuTitulo(materiais, leitura)
     if (!profile || !material) return
 
     const chaveLeitura = `${profile.id}:${material.id}`

@@ -593,6 +593,26 @@ export default function AdminPage() {
     folha: encontrarFolhaDoProfissional(folhasPontoD1, profile),
   }))
   const folhasPontoIdentificadas = folhasPontoPorProfissional.filter(item => item.folha).length
+  const materiaisFolhaPontoD1 = materiaisObrigatorios.filter(isFolhaPontoD1)
+  const leiturasFolhaPontoEsperadas = profiles.flatMap(profile =>
+    materiaisFolhaPontoD1
+      .filter(material => encontrarFolhaDoProfissional(folhasPontoD1.filter(folha => folha.material_id === material.id), profile))
+      .map(material => ({ profile, material })),
+  )
+  const totalAssinaturasFolhaPonto = leiturasFolhaPontoEsperadas
+    .filter(item => assinaturasUnicas.has(`${item.profile.id}:${item.material.id}`))
+    .length
+  const profissionaisFolhaPontoCientesLista = profiles.filter(profile => {
+    const materiaisDoProfile = leiturasFolhaPontoEsperadas.filter(item => item.profile.id === profile.id)
+    return materiaisDoProfile.length > 0 && materiaisDoProfile.every(item => assinaturasUnicas.has(`${profile.id}:${item.material.id}`))
+  })
+  const profissionaisFolhaPontoPendentesLista = profiles.filter(profile => {
+    const materiaisDoProfile = leiturasFolhaPontoEsperadas.filter(item => item.profile.id === profile.id)
+    return materiaisDoProfile.length > 0 && !materiaisDoProfile.every(item => assinaturasUnicas.has(`${profile.id}:${item.material.id}`))
+  })
+  const profissionaisSemFolhaPontoLista = profiles.filter(profile =>
+    !leiturasFolhaPontoEsperadas.some(item => item.profile.id === profile.id),
+  )
   const podeEditar = perfilAdmin === 'admin'
   const materiaisVisiveisGestao = materiais.filter(material => material.ativo)
   const leiturasGestao = leiturasMateriais.reduce<Record<number, string>>((acc, leitura) => {
@@ -700,6 +720,7 @@ export default function AdminPage() {
                 { label: 'Profissionais cientes', valor: contagemSheetsDisponivel && totalLeiturasPossiveis > 0 ? `${profissionaisComCienciaCompleta}/${profiles.length}` : 'Verificar', apoio: contagemSheetsDisponivel ? `${totalLeituras}/${totalLeiturasPossiveis} assinaturas · Google Sheets ${resumoLeiturasGoogle?.totalCompatibilizado ?? 0}` : 'contagem depende do Google Sheets', cor: contagemSheetsDisponivel ? '#38bdf8' : '#facc15' },
                 { label: 'Mensagens recebidas', valor: erroMensagensAdmin ? 'Verificar' : `${totalMensagensRecebidas}`, apoio: erroMensagensAdmin || (ultimaMensagemRecebida?.nome ? `ultima: ${ultimaMensagemRecebida.nome}` : 'aba Mensagens'), cor: erroMensagensAdmin ? '#facc15' : totalMensagensRecebidas > 0 ? '#f472b6' : 'rgba(240,230,255,0.45)' },
                 { label: 'Folha D-1 analisada', valor: erroFolhaPontoD1 ? 'Verificar' : `${folhasPontoIdentificadas}/${profiles.length}`, apoio: erroFolhaPontoD1 || 'horas por profissional', cor: erroFolhaPontoD1 ? '#facc15' : folhasPontoIdentificadas === profiles.length && profiles.length > 0 ? '#4ade80' : '#38bdf8' },
+                { label: 'Ciência Folha D-1', valor: contagemSheetsDisponivel && leiturasFolhaPontoEsperadas.length > 0 ? `${profissionaisFolhaPontoCientesLista.length}/${leiturasFolhaPontoEsperadas.length > 0 ? new Set(leiturasFolhaPontoEsperadas.map(item => item.profile.id)).size : 0}` : 'Verificar', apoio: contagemSheetsDisponivel ? `${totalAssinaturasFolhaPonto}/${leiturasFolhaPontoEsperadas.length} assinaturas D-1` : 'contagem depende do Google Sheets', cor: contagemSheetsDisponivel ? '#38bdf8' : '#facc15' },
               ].map((c, i) => (
                 <div key={i} className="glass-sm executive-card" style={{ padding: 18 }}>
                   <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 8 }}>{c.label}</div>
@@ -734,6 +755,47 @@ export default function AdminPage() {
                           </>
                         ) : (
                           <p>A contagem de ciência será exibida somente após resposta do Google Sheets.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {c.label === 'Ciência Folha D-1' && (
+                    <div className="awareness-popover-trigger" tabIndex={0} aria-label="Ver ciência da Folha de Ponto D-1">
+                      Ver nomes
+                      <div className="awareness-popover">
+                        {contagemSheetsDisponivel ? (
+                          <>
+                            <div>
+                              <div className="awareness-popover-title">Assinaram Folha D-1</div>
+                              {profissionaisFolhaPontoCientesLista.length > 0 ? (
+                                <ul>
+                                  {profissionaisFolhaPontoCientesLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
+                                </ul>
+                              ) : (
+                                <p>Nenhuma profissional assinou a Folha D-1 ainda.</p>
+                              )}
+                            </div>
+                            <div>
+                              <div className="awareness-popover-title pending">Faltam assinar Folha D-1</div>
+                              {profissionaisFolhaPontoPendentesLista.length > 0 ? (
+                                <ul>
+                                  {profissionaisFolhaPontoPendentesLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
+                                </ul>
+                              ) : (
+                                <p>Todas as profissionais com folha identificada assinaram.</p>
+                              )}
+                            </div>
+                            {profissionaisSemFolhaPontoLista.length > 0 && (
+                              <div>
+                                <div className="awareness-popover-title pending">Sem folha identificada</div>
+                                <ul>
+                                  {profissionaisSemFolhaPontoLista.map(profile => <li key={profile.id}>{profile.nome}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p>A contagem da Folha D-1 será exibida somente após resposta do Google Sheets.</p>
                         )}
                       </div>
                     </div>

@@ -240,6 +240,7 @@ export default function EditarPage() {
         return
       }
 
+      let criadoPorFallback = false
       const { error: functionError } = await supabase.functions.invoke('criar-profissional', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -254,6 +255,7 @@ export default function EditarPage() {
       })
 
       if (functionError) {
+        criadoPorFallback = true
         const id = await criarUsuarioAuthPorSignup(email, senha, nome, primeiroNome, novoRole)
 
         const { error: profileError } = await supabase.from('profiles').upsert(
@@ -285,9 +287,10 @@ export default function EditarPage() {
       setNovoEmail('')
       setNovaSenha('')
       setNovoRole('user')
+      const origemCriacao = criadoPorFallback ? ' pelo fluxo alternativo de Auth' : ''
       setMensagemAdicionar(novoRole === 'user'
-        ? 'Profissional criada no Supabase Auth, vinculada ao painel e liberada nas metas.'
-        : 'Acesso Gestão criado com visualização administrativa sem edição.'
+        ? `Profissional criada${origemCriacao}, vinculada ao painel e liberada nas metas.`
+        : `Acesso Gestão criado${origemCriacao} com visualização administrativa sem edição.`
       )
       await carregar(mesSelecionado)
     } catch (error) {
