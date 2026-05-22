@@ -19,6 +19,7 @@ import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/l
 import { buscarLeiturasMateriaisGoogleSheets, buscarMensagensGoogleSheets, enviarMensagemGoogleSheets, registrarEventoGoogleSheets, type GoogleSheetsMessageRow } from '@/lib/google-sheets-sync'
 import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
 import { criarCaminhoMaterialStorage, listarMateriaisDoStorage } from '@/lib/materiais-storage'
+import { exigeCienciaMaterial } from '@/lib/material-obligation'
 import {
   CATEGORIA_FOLHA_PONTO_D1,
   encontrarFolhaDoProfissional,
@@ -578,7 +579,7 @@ export default function AdminPage() {
   const mediaFeedback = notasFeedback.length > 0 ? notasFeedback.reduce((s, nota) => s + nota, 0) / notasFeedback.length : 0
   const abaixoDoGatilho = rankingMensal.filter(p => p.realizado < cfg.meta_gatilho).length
   const pertoDaMeta = rankingMensal.filter(p => p.pctMeta >= 80 && p.pctMeta < 100).length
-  const materiaisObrigatorios = materiais.filter(material => material.ativo && isPdfMaterial(material) && !isFolhaPontoD1(material))
+  const materiaisObrigatorios = materiais.filter(material => material.ativo && isPdfMaterial(material) && exigeCienciaMaterial(material))
   const idsProfissionais = new Set(profiles.map(profile => profile.id))
   const idsMateriaisObrigatorios = new Set(materiaisObrigatorios.map(material => material.id))
   const leiturasContagemSheets = resumoLeiturasGoogle?.leituras ?? []
@@ -880,13 +881,13 @@ export default function AdminPage() {
                         <div className="material-category-title">{categoria}</div>
                         {itens.map(material => {
                           const lidoEm = leiturasGestao[material.id]
-                          const dispensaCiencia = isFolhaPontoD1(material)
+                          const dispensaCiencia = !exigeCienciaMaterial(material)
                           return (
                           <div key={material.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
                             <div style={{ minWidth: 220, flex: '1 1 260px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                 <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
-                                {dispensaCiencia ? <span className="material-read-badge">Consulta individual</span> : lidoEm && <span className="material-read-badge">Ciente</span>}
+                                {dispensaCiencia ? <span className="material-read-badge">Consulta</span> : lidoEm && <span className="material-read-badge">Ciente</span>}
                               </div>
                               {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
                               <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
@@ -1242,7 +1243,7 @@ export default function AdminPage() {
                           <td style={{ padding: 16 }}><span className="material-category-badge">{categoriaDoMaterial(material)}</span></td>
                           <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{material.file_name}</td>
                           <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.5)', whiteSpace: 'nowrap' }}>{formatFileSize(material.file_size)}</td>
-                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{isFolhaPontoD1(material) ? 'Não exige ciência' : `${totalLeiturasMaterial(material.id)}/${profiles.length} cientes`}</td>
+                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{exigeCienciaMaterial(material) ? `${totalLeiturasMaterial(material.id)}/${profiles.length} cientes` : 'Não exige ciência'}</td>
                           <td style={{ padding: 16 }}><span className={material.ativo ? 'badge-acima' : 'badge-abaixo'}>{material.ativo ? 'Visível' : 'Oculto'}</span></td>
                           <td style={{ padding: 16, whiteSpace: 'nowrap' }}>
                             <button type="button" onClick={() => handleAbrirMaterial(material)} style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.24)', color: '#7dd3fc', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8 }}>
