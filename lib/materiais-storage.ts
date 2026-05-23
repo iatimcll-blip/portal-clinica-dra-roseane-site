@@ -66,7 +66,8 @@ function pareceFolhaPonto(...valores: string[]) {
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
 
-  return texto.includes('FOLHA') && texto.includes('PONTO')
+  return (texto.includes('FOLHA') && texto.includes('PONTO'))
+    || (texto.includes('ESPELHO') && texto.includes('PONTO'))
 }
 
 function materialDeArquivoStorage(arquivo: StorageFile): MaterialInformativo {

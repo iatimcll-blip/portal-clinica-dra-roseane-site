@@ -47,6 +47,7 @@ export function isFolhaPontoD1(material: Pick<MaterialInformativo, 'categoria'> 
 
   return textos.some(texto => texto === normalizarNomePonto(CATEGORIA_FOLHA_PONTO_D1))
     || textos.some(texto => texto.includes('FOLHA') && texto.includes('PONTO'))
+    || textos.some(texto => texto.includes('ESPELHO') && texto.includes('PONTO'))
 }
 
 function minutosDeHora(valor: string) {
@@ -178,10 +179,9 @@ export async function extrairFolhasPontoD1DePdf(
   url: string,
   material: Pick<MaterialInformativo, 'id' | 'titulo' | 'file_name'>,
 ) {
-  const pdfjs = await import('pdfjs-dist')
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
-  const documento = await pdfjs.getDocument({ url }).promise
+  const documento = await pdfjs.getDocument({ url, disableWorker: true } as Parameters<typeof pdfjs.getDocument>[0]).promise
   const paginas: string[] = []
 
   for (let pageNumber = 1; pageNumber <= documento.numPages; pageNumber += 1) {
@@ -199,7 +199,9 @@ export async function extrairFolhasPontoD1DePdf(
 export function encontrarFolhaDoProfissional(folhas: FolhaPontoD1[], profile: Profile | null) {
   if (!profile) return null
   const nomeProfile = normalizarNomePonto(profile.nome)
+  const primeiroNomeProfile = normalizarNomePonto(profile.primeiro_nome)
   return folhas.find(folha => folha.nome_normalizado === nomeProfile)
     ?? folhas.find(folha => folha.nome_normalizado.includes(nomeProfile) || nomeProfile.includes(folha.nome_normalizado))
+    ?? folhas.find(folha => primeiroNomeProfile && folha.nome_normalizado.includes(primeiroNomeProfile))
     ?? null
 }
