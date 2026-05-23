@@ -623,18 +623,19 @@ export default function PainelProfissional() {
   const materiaisPdf = materiaisIndividuais.filter(material => isPdfMaterial(material) && exigeCienciaMaterial(material))
   const materiaisPendentesCiencia = materiaisPdf.filter(material => !leiturasMateriais[material.id])
   const precisaLiberarMateriais = materiaisPendentesCiencia.length > 0
-  const podeVisualizarDados = !precisaLiberarMateriais
   const materiaisAgrupados = materiaisIndividuais.reduce<Record<string, MaterialInformativo[]>>((acc, material) => {
     const categoria = categoriaDoMaterial(material)
     acc[categoria] = [...(acc[categoria] ?? []), material]
     return acc
   }, {})
+  const autoavaliacaoLiberada = configAutoavaliacaoEstaLiberada(autoavaliacaoConfig)
+  const precisaResponderAutoavaliacao = autoavaliacaoLiberada && !autoavaliacaoResposta
+  const podeVisualizarDados = !precisaLiberarMateriais && !precisaResponderAutoavaliacao
   const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${YOUTUBE_UPLOADS_PLAYLIST_ID}&index=${youtubeVideoIndex}&autoplay=1&mute=${youtubeMuted ? '1' : '0'}&playsinline=1&rel=0&controls=1`
   const gruposAutoavaliacao = AUTOAVALIACAO_PERGUNTAS.reduce<Record<string, typeof AUTOAVALIACAO_PERGUNTAS>>((acc, pergunta) => {
     acc[pergunta.grupo] = [...(acc[pergunta.grupo] ?? []), pergunta]
     return acc
   }, {})
-  const autoavaliacaoLiberada = configAutoavaliacaoEstaLiberada(autoavaliacaoConfig)
   const autoavaliacaoMedia = calcularMediaAutoavaliacao(notasAutoavaliacao)
 
   if (loading || !profile) {
@@ -736,13 +737,35 @@ export default function PainelProfissional() {
 
         {!podeVisualizarDados && (
           <div className="glass-sm" style={{ padding: 24, marginBottom: 24, border: '1px solid rgba(250,204,21,0.22)', background: 'rgba(250,204,21,0.06)' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, color: '#facc15' }}>Atenção: materiais pendentes de ciência</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, color: '#facc15' }}>
+              Atenção: pendência prioritária
+            </h2>
             <p style={{ color: 'rgba(240,230,255,0.72)', fontSize: 14, lineHeight: 1.6 }}>
-              Seus dados, valores, metas e indicadores serão liberados após a assinatura do termo de ciência. Leia todos os materiais informativos pendentes até a última página e clique em <strong>Li e estou ciente</strong>.
+              Seus dados, valores, metas e indicadores serão liberados após concluir as pendências obrigatórias.
+              {precisaResponderAutoavaliacao && (
+                <>
+                  {' '}Responda a <strong>Autoavaliação de Desempenho</strong> liberada pela administração.
+                </>
+              )}
+              {precisaLiberarMateriais && (
+                <>
+                  {' '}Leia todos os materiais informativos pendentes até a última página e clique em <strong>Li e estou ciente</strong>.
+                </>
+              )}
             </p>
             <div style={{ color: 'rgba(240,230,255,0.5)', fontSize: 12, marginTop: 10 }}>
-              Pendentes: {materiaisPendentesCiencia.length} de {materiaisPdf.length}
+              {precisaResponderAutoavaliacao && (
+                <div>Autoavaliação pendente: {autoavaliacaoConfig?.periodo}</div>
+              )}
+              {precisaLiberarMateriais && (
+                <div>Materiais pendentes: {materiaisPendentesCiencia.length} de {materiaisPdf.length}</div>
+              )}
             </div>
+            {precisaResponderAutoavaliacao && (
+              <a href="#painel-autoavaliacao" style={{ display: 'inline-flex', marginTop: 14, color: '#f0e6ff', fontSize: 13, fontWeight: 800, textDecoration: 'none', background: 'linear-gradient(135deg,#be185d,#7c3aed)', borderRadius: 10, padding: '10px 14px' }}>
+                Responder autoavaliação
+              </a>
+            )}
           </div>
         )}
 
