@@ -771,7 +771,11 @@ export default function PainelProfissional() {
   const faltaAnual = Math.max(0, metaAnual - acumuladoAnual)
   const folhaPontoProfissional = encontrarFolhaDoProfissional(folhasPontoD1, profile)
   const temMaterialFolhaPontoD1 = materiais.some(isFolhaPontoD1)
-  const materiaisIndividuais = materiais.filter(material => !isFolhaPontoD1(material) || folhaPontoProfissional?.material_id === material.id)
+  const materiaisIndividuais = materiais.filter(material =>
+    !isFolhaPontoD1(material)
+    || folhaPontoProfissional?.material_id === material.id
+    || Boolean(erroFolhaPontoD1),
+  )
   const materiaisPdf = materiaisIndividuais.filter(material => isPdfMaterial(material) && exigeCienciaMaterial(material))
   const materiaisPendentesCiencia = materiaisPdf.filter(material => !leiturasMateriais[material.id])
   const precisaLiberarMateriais = materiaisPendentesCiencia.length > 0
@@ -949,6 +953,51 @@ export default function PainelProfissional() {
           </div>
         )}
 
+        {(folhaPontoProfissional || erroFolhaPontoD1 || temMaterialFolhaPontoD1) && (
+          <div id="painel-folha-ponto" className="glass-sm ponto-d1-panel" style={{ padding: 24, marginBottom: 24 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Folha de Ponto D-1</h3>
+            {erroFolhaPontoD1 ? (
+              <div style={{ color: '#facc15', fontSize: 13 }}>{erroFolhaPontoD1}</div>
+            ) : folhaPontoProfissional ? (
+              <>
+                <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 16 }}>
+                  Período {folhaPontoProfissional!.periodo}. Visualização individual liberada na página {folhaPontoProfissional!.pagina} do documento.
+                </p>
+                {folhaPontoProfissional!.marcacao_impar && (
+                  <div className="ponto-d1-alert">
+                    <div className="ponto-d1-alert-icon">!</div>
+                    <div>
+                      <div className="ponto-d1-alert-title">
+                        Procure seu gestor para ajustar seus pontos com erro de marcação
+                      </div>
+                      <div className="ponto-d1-alert-text">
+                        Dias com marcação ímpar: {folhaPontoProfissional!.dias_marcacao_impar.join(', ')}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="responsive-grid professional-kpi-grid ponto-d1-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                  {[
+                    { label: 'Horas batidas', valor: folhaPontoProfissional!.horas_batidas, cor: '#38bdf8' },
+                    { label: 'Escala prevista', valor: folhaPontoProfissional!.horas_previstas, cor: 'rgba(240,230,255,0.85)' },
+                    { label: 'Trabalhadas + abono', valor: folhaPontoProfissional!.horas_com_abono, cor: '#c084fc' },
+                    { label: 'Saldo do período', valor: folhaPontoProfissional!.saldo_periodo, cor: folhaPontoProfissional!.saldo_minutos >= 0 ? '#4ade80' : '#f87171' },
+                  ].map(item => (
+                    <div key={item.label} className="ponto-d1-card">
+                      <div style={{ fontSize: 20, fontWeight: 800, color: item.cor }}>{item.valor}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ color: '#7dd3fc', fontSize: 13 }}>
+                A Folha de Ponto D-1 foi anexada. A visualização individual será exibida assim que o documento for compatibilizado com seu nome.
+              </div>
+            )}
+          </div>
+        )}
+
         {podeVisualizarDados && (
           <>
         <div className="hero-summary" style={{
@@ -999,7 +1048,7 @@ export default function PainelProfissional() {
           ))}
         </div>
 
-        {(folhaPontoProfissional || erroFolhaPontoD1) && (
+        {false && (folhaPontoProfissional || erroFolhaPontoD1) && (
           <div className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Folha de Ponto D-1</h3>
             {erroFolhaPontoD1 ? (
@@ -1007,9 +1056,9 @@ export default function PainelProfissional() {
             ) : folhaPontoProfissional && (
               <>
                 <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 16 }}>
-                  Período {folhaPontoProfissional.periodo}. Visualização individual liberada na página {folhaPontoProfissional.pagina} do documento.
+                  Período {folhaPontoProfissional!.periodo}. Visualização individual liberada na página {folhaPontoProfissional!.pagina} do documento.
                 </p>
-                {folhaPontoProfissional.marcacao_impar && (
+                {folhaPontoProfissional!.marcacao_impar && (
                   <div style={{
                     display: 'flex',
                     gap: 14,
@@ -1029,17 +1078,17 @@ export default function PainelProfissional() {
                         Procure seu gestor para ajustar seus pontos com erro de marcação
                       </div>
                       <div style={{ fontSize: 12, color: '#fecaca' }}>
-                        Dias com marcação ímpar: {folhaPontoProfissional.dias_marcacao_impar.join(', ')}
+                        Dias com marcação ímpar: {folhaPontoProfissional!.dias_marcacao_impar.join(', ')}
                       </div>
                     </div>
                   </div>
                 )}
                 <div className="responsive-grid professional-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                   {[
-                    { label: 'Horas batidas', valor: folhaPontoProfissional.horas_batidas, cor: '#38bdf8' },
-                    { label: 'Escala prevista', valor: folhaPontoProfissional.horas_previstas, cor: 'rgba(240,230,255,0.85)' },
-                    { label: 'Trabalhadas + abono', valor: folhaPontoProfissional.horas_com_abono, cor: '#c084fc' },
-                    { label: 'Saldo do período', valor: folhaPontoProfissional.saldo_periodo, cor: folhaPontoProfissional.saldo_minutos >= 0 ? '#4ade80' : '#f87171' },
+                    { label: 'Horas batidas', valor: folhaPontoProfissional!.horas_batidas, cor: '#38bdf8' },
+                    { label: 'Escala prevista', valor: folhaPontoProfissional!.horas_previstas, cor: 'rgba(240,230,255,0.85)' },
+                    { label: 'Trabalhadas + abono', valor: folhaPontoProfissional!.horas_com_abono, cor: '#c084fc' },
+                    { label: 'Saldo do período', valor: folhaPontoProfissional!.saldo_periodo, cor: folhaPontoProfissional!.saldo_minutos >= 0 ? '#4ade80' : '#f87171' },
                   ].map(item => (
                     <div key={item.label} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,0.03)' }}>
                       <div style={{ fontSize: 20, fontWeight: 800, color: item.cor }}>{item.valor}</div>
@@ -1190,6 +1239,7 @@ export default function PainelProfissional() {
                 {itens.map(material => {
                   const lidoEm = leiturasMateriais[material.id]
                   const dispensaCiencia = !exigeCienciaMaterial(material)
+                  const folhaSemCorrespondencia = isFolhaPontoD1(material) && !folhaPontoProfissional
                   const materialAberto = visualizadorPdf?.materialId === material.id
                   const chegouAoFinal = Boolean(materialAberto && totalPaginasPdf > 0 && visualizadorPdf && visualizadorPdf.pagina >= totalPaginasPdf)
                   const podeConfirmarCiencia = Boolean(lidoEm) || chegouAoFinal
@@ -1207,7 +1257,7 @@ export default function PainelProfissional() {
                         <button
                           type="button"
                           onClick={() => carregarVisualizacaoPdf(material)}
-                          disabled={!isPdfMaterial(material) || carregandoPdf}
+                          disabled={!isPdfMaterial(material) || carregandoPdf || folhaSemCorrespondencia}
                           style={{
                             background: visualizadorPdf?.materialId === material.id ? 'rgba(74,222,128,0.16)' : 'linear-gradient(135deg,#be185d,#7c3aed)',
                             border: visualizadorPdf?.materialId === material.id ? '1px solid rgba(74,222,128,0.28)' : 0,
@@ -1216,11 +1266,11 @@ export default function PainelProfissional() {
                             padding: '10px 14px',
                             fontSize: 12,
                             fontWeight: 700,
-                            cursor: isPdfMaterial(material) ? 'pointer' : 'not-allowed',
-                            opacity: isPdfMaterial(material) ? 1 : 0.55,
+                            cursor: isPdfMaterial(material) && !folhaSemCorrespondencia ? 'pointer' : 'not-allowed',
+                            opacity: isPdfMaterial(material) && !folhaSemCorrespondencia ? 1 : 0.55,
                           }}
                         >
-                          {isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
+                          {folhaSemCorrespondencia ? 'Aguardando compatibilização' : isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
                         </button>
                         {dispensaCiencia ? (
                           <div className="material-read-confirmed">
@@ -1447,11 +1497,11 @@ export default function PainelProfissional() {
 
       <nav className="mobile-bottom-nav" aria-label="Navegacao do painel">
         <a href="#painel-resumo">Painel</a>
+        <a href="#painel-folha-ponto">Ponto</a>
         <a href="#painel-metas">Metas</a>
         <a href="#painel-materiais">Materiais</a>
         <a href="#painel-autoavaliacao">Avaliação</a>
         <a href="#painel-mensagem-admin">Mensagem</a>
-        <a href="#painel-senha">Senha</a>
       </nav>
 
       <DecoracaoDireita />

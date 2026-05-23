@@ -440,6 +440,51 @@ body {
   font-weight: 700;
 }
 
+.ponto-d1-alert {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: rgba(239,68,68,0.14);
+  border: 1px solid rgba(239,68,68,0.34);
+  color: #fecaca;
+}
+
+.ponto-d1-alert-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #ef4444;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.ponto-d1-alert-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.ponto-d1-alert-text {
+  font-size: 12px;
+  color: #fecaca;
+}
+
+.ponto-d1-card {
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255,255,255,0.03);
+  min-width: 0;
+}
+
 .photo-placeholder {
   width: 100%;
   height: 100%;
@@ -743,6 +788,20 @@ body {
     scroll-padding-bottom: 90px;
   }
 
+  .ponto-d1-alert {
+    align-items: flex-start;
+    padding: 14px;
+  }
+
+  .ponto-d1-alert-title {
+    font-size: 16px;
+    line-height: 1.25;
+  }
+
+  .ponto-d1-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
   .mobile-bottom-nav {
     position: fixed;
     left: 10px;
@@ -750,7 +809,7 @@ body {
     bottom: 10px;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 6px;
     padding: 8px;
     border-radius: 16px;
@@ -773,7 +832,7 @@ body {
 
   .app-main {
     width: 100% !important;
-    padding: 18px 14px 92px !important;
+    padding: 18px 14px 132px !important;
     overflow-x: hidden !important;
   }
 
@@ -926,7 +985,7 @@ body {
   }
 
   .app-main {
-    padding: 14px 10px 24px !important;
+    padding: 14px 10px 132px !important;
   }
 
   .app-sidebar {
@@ -996,6 +1055,10 @@ body {
     height: 68dvh;
     min-height: 360px;
     padding: 8px;
+  }
+
+  .ponto-d1-grid {
+    grid-template-columns: 1fr !important;
   }
 
   h1 {
