@@ -180,8 +180,19 @@ export async function extrairFolhasPontoD1DePdf(
   material: Pick<MaterialInformativo, 'id' | 'titulo' | 'file_name'>,
 ) {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).toString()
 
-  const documento = await pdfjs.getDocument({ url, disableWorker: true } as Parameters<typeof pdfjs.getDocument>[0]).promise
+  const resposta = await fetch(url)
+  if (!resposta.ok) {
+    throw new Error(`Nao foi possivel baixar a Folha de Ponto D-1 (${resposta.status}).`)
+  }
+
+  const arquivo = new Uint8Array(await resposta.arrayBuffer())
+  const documento = await pdfjs.getDocument({
+    data: arquivo,
+    isEvalSupported: false,
+    useWorkerFetch: false,
+  } as Parameters<typeof pdfjs.getDocument>[0]).promise
   const paginas: string[] = []
 
   for (let pageNumber = 1; pageNumber <= documento.numPages; pageNumber += 1) {
