@@ -83,6 +83,22 @@ function salvarLeituraLocal(profileId: string, materialId: number, readAt: strin
   localStorage.setItem(chaveLeiturasLocais(profileId), JSON.stringify({ ...leituras, [materialId]: readAt }))
 }
 
+function hojeISO() {
+  const agora = new Date()
+  const ano = agora.getFullYear()
+  const mes = String(agora.getMonth() + 1).padStart(2, '0')
+  const dia = String(agora.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
+}
+
+function configAutoavaliacaoEstaLiberada(config: AutoavaliacaoConfig | null) {
+  if (!config?.liberado || !config.periodo) return false
+  const hoje = hojeISO()
+  const inicioOk = !config.data_inicio || config.data_inicio <= hoje
+  const fimOk = !config.data_fim || config.data_fim >= hoje
+  return inicioOk && fimOk
+}
+
 type DashboardProfissional = {
   realizado: number
   comissao_avaliacoes: number
@@ -610,7 +626,7 @@ export default function PainelProfissional() {
     acc[pergunta.grupo] = [...(acc[pergunta.grupo] ?? []), pergunta]
     return acc
   }, {})
-  const autoavaliacaoLiberada = Boolean(autoavaliacaoConfig?.liberado && autoavaliacaoConfig.periodo)
+  const autoavaliacaoLiberada = configAutoavaliacaoEstaLiberada(autoavaliacaoConfig)
   const autoavaliacaoMedia = calcularMediaAutoavaliacao(notasAutoavaliacao)
 
   if (loading || !profile) {
@@ -1062,7 +1078,9 @@ export default function PainelProfissional() {
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Autoavaliação de Desempenho</h3>
                 <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)' }}>
-                  Formulário liberado para {autoavaliacaoConfig?.periodo}. Responda de forma reflexiva e registre seus pontos de evolução.
+                  Formulário liberado para {autoavaliacaoConfig?.periodo}
+                  {autoavaliacaoConfig?.data_inicio && autoavaliacaoConfig?.data_fim ? `, de ${autoavaliacaoConfig.data_inicio} até ${autoavaliacaoConfig.data_fim}` : ''}.
+                  {' '}Responda de forma reflexiva e registre seus pontos de evolução.
                 </p>
               </div>
               <span className="message-panel-badge">

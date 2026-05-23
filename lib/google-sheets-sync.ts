@@ -79,6 +79,8 @@ export type GoogleSheetsMessagePayload = {
 export type AutoavaliacaoConfig = {
   liberado: boolean
   periodo: string
+  data_inicio?: string
+  data_fim?: string
   liberado_em?: string
   encerrado_em?: string
 }
@@ -261,7 +263,7 @@ export function buscarAutoavaliacaoRespostasGoogleSheets(): Promise<Autoavaliaca
   return buscarJsonpGoogleSheets<AutoavaliacaoResposta[]>({ tipo: 'autoavaliacao_respostas' })
 }
 
-export function atualizarAutoavaliacaoConfigGoogleSheets(config: Pick<AutoavaliacaoConfig, 'liberado' | 'periodo'>): Promise<void> {
+export function atualizarAutoavaliacaoConfigGoogleSheets(config: Pick<AutoavaliacaoConfig, 'liberado' | 'periodo' | 'data_inicio' | 'data_fim'>): Promise<void> {
   return buscarJsonpGoogleSheets<{ status?: string }>({
     acao: 'autoavaliacao_config',
     payload: JSON.stringify({

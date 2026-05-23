@@ -52,6 +52,8 @@ var CABECALHO_AUTOAVALIACAO_CONFIG = [
   'Atualizado em',
   'Liberado',
   'Periodo',
+  'Inicio',
+  'Fim',
   'Origem',
   'Navegador',
 ]
@@ -319,6 +321,8 @@ function obterAutoavaliacaoConfig_() {
     return {
       liberado: false,
       periodo: '',
+      data_inicio: '',
+      data_fim: '',
     }
   }
 
@@ -326,6 +330,8 @@ function obterAutoavaliacaoConfig_() {
   return {
     liberado: String(row[1] || '').toLowerCase() === 'sim',
     periodo: String(row[2] || ''),
+    data_inicio: String(row[3] || ''),
+    data_fim: String(row[4] || ''),
     liberado_em: String(row[0] || ''),
   }
 }
@@ -339,6 +345,8 @@ function atualizarAutoavaliacaoConfig_(payload, ss) {
     formatarDataHoraBrasil_(payload.registrado_em),
     payload.liberado ? 'Sim' : 'Nao',
     payload.periodo || '',
+    payload.data_inicio || '',
+    payload.data_fim || '',
     payload.origem || '',
     payload.user_agent || '',
   ])
@@ -588,8 +596,11 @@ function getOrCreateSheet_(ss, name, headers) {
   var needsHeaders = currentHeaders.every(function(value) {
     return value === ''
   })
+  var missingHeaders = headers.some(function(value, index) {
+    return String(currentHeaders[index] || '') !== String(value || '')
+  })
 
-  if (needsHeaders) {
+  if (needsHeaders || missingHeaders) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers])
     sheet.setFrozenRows(1)
   }

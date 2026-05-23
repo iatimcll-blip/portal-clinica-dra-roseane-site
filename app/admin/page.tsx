@@ -107,6 +107,8 @@ export default function AdminPage() {
   const [erroMensagensAdmin, setErroMensagensAdmin] = useState('')
   const [autoavaliacaoConfig, setAutoavaliacaoConfig] = useState<AutoavaliacaoConfig>({ liberado: false, periodo: '' })
   const [periodoAutoavaliacao, setPeriodoAutoavaliacao] = useState('')
+  const [dataInicioAutoavaliacao, setDataInicioAutoavaliacao] = useState('')
+  const [dataFimAutoavaliacao, setDataFimAutoavaliacao] = useState('')
   const [autoavaliacaoRespostas, setAutoavaliacaoRespostas] = useState<AutoavaliacaoResposta[]>([])
   const [autoavaliacaoProfileId, setAutoavaliacaoProfileId] = useState('')
   const [statusAutoavaliacaoAdmin, setStatusAutoavaliacaoAdmin] = useState('')
@@ -133,6 +135,8 @@ export default function AdminPage() {
       setNomeAtual('')
       setAutoavaliacaoConfig({ liberado: false, periodo: '' })
       setPeriodoAutoavaliacao('')
+      setDataInicioAutoavaliacao('')
+      setDataFimAutoavaliacao('')
       setAutoavaliacaoRespostas([])
       setLoading(false)
       return
@@ -248,6 +252,8 @@ export default function AdminPage() {
       .then(([configAuto, respostasAuto]) => {
         setAutoavaliacaoConfig(configAuto)
         setPeriodoAutoavaliacao(configAuto.periodo || `Avaliação ${mesSelecionado} 2025`)
+        setDataInicioAutoavaliacao(configAuto.data_inicio || '')
+        setDataFimAutoavaliacao(configAuto.data_fim || '')
         setAutoavaliacaoRespostas(respostasAuto)
         setStatusAutoavaliacaoAdmin('')
         setAutoavaliacaoProfileId(atual => atual || (profs?.[0]?.id ?? ''))
@@ -587,8 +593,18 @@ export default function AdminPage() {
 
   async function salvarLiberacaoAutoavaliacao(liberado: boolean) {
     const periodo = periodoAutoavaliacao.trim()
+    const dataInicio = dataInicioAutoavaliacao.trim()
+    const dataFim = dataFimAutoavaliacao.trim()
     if (liberado && !periodo) {
       setStatusAutoavaliacaoAdmin('Informe o período da avaliação antes de liberar o formulário.')
+      return
+    }
+    if (liberado && (!dataInicio || !dataFim)) {
+      setStatusAutoavaliacaoAdmin('Informe a data inicial e a data final para liberar o formulário.')
+      return
+    }
+    if (liberado && dataInicio > dataFim) {
+      setStatusAutoavaliacaoAdmin('A data inicial não pode ser maior que a data final.')
       return
     }
 
@@ -596,8 +612,8 @@ export default function AdminPage() {
     setStatusAutoavaliacaoAdmin('')
 
     try {
-      await atualizarAutoavaliacaoConfigGoogleSheets({ liberado, periodo })
-      const novaConfig = { liberado, periodo, liberado_em: new Date().toISOString() }
+      await atualizarAutoavaliacaoConfigGoogleSheets({ liberado, periodo, data_inicio: dataInicio, data_fim: dataFim })
+      const novaConfig = { liberado, periodo, data_inicio: dataInicio, data_fim: dataFim, liberado_em: new Date().toISOString() }
       setAutoavaliacaoConfig(novaConfig)
       setStatusAutoavaliacaoAdmin(liberado
         ? 'Formulário de autoavaliação liberado para as profissionais.'
@@ -1352,7 +1368,7 @@ export default function AdminPage() {
                 </div>
 
                 <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'end' }}>
+                  <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 180px 180px', gap: 12, alignItems: 'end' }}>
                     <label style={{ display: 'grid', gap: 6 }}>
                       <span style={{ fontSize: 12, color: 'rgba(240,230,255,0.55)' }}>Período da avaliação</span>
                       <input
@@ -1363,6 +1379,28 @@ export default function AdminPage() {
                         disabled={!podeEditar}
                       />
                     </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: 12, color: 'rgba(240,230,255,0.55)' }}>Data inicial</span>
+                      <input
+                        type="date"
+                        className="input-field"
+                        value={dataInicioAutoavaliacao}
+                        onChange={event => setDataInicioAutoavaliacao(event.target.value)}
+                        disabled={!podeEditar}
+                      />
+                    </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: 12, color: 'rgba(240,230,255,0.55)' }}>Data final</span>
+                      <input
+                        type="date"
+                        className="input-field"
+                        value={dataFimAutoavaliacao}
+                        onChange={event => setDataFimAutoavaliacao(event.target.value)}
+                        disabled={!podeEditar}
+                      />
+                    </label>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
                     <button type="button" className="btn-primary" onClick={() => salvarLiberacaoAutoavaliacao(true)} disabled={!podeEditar || salvandoAutoavaliacaoAdmin}>
                       Liberar formulário
                     </button>
@@ -1376,10 +1414,11 @@ export default function AdminPage() {
                     </button>
                   </div>
 
-                  <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 16 }}>
+                  <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 16 }}>
                     {[
                       { label: 'Status', valor: autoavaliacaoConfig.liberado ? 'Liberado' : 'Encerrado', cor: autoavaliacaoConfig.liberado ? '#4ade80' : '#facc15' },
                       { label: 'Período ativo', valor: autoavaliacaoConfig.periodo || 'Não definido', cor: '#c084fc' },
+                      { label: 'Janela de liberação', valor: autoavaliacaoConfig.data_inicio && autoavaliacaoConfig.data_fim ? `${autoavaliacaoConfig.data_inicio} a ${autoavaliacaoConfig.data_fim}` : 'Sem datas', cor: '#f472b6' },
                       { label: 'Respostas recebidas', valor: `${profissionaisComAutoavaliacao.length}/${profiles.length}`, cor: '#38bdf8' },
                     ].map(item => (
                       <div key={item.label} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,0.03)' }}>
