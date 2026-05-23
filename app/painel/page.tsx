@@ -44,6 +44,7 @@ import {
 
 const ANO = 2025
 const BUCKET_MATERIAIS = 'materiais-informativos'
+const PASTA_FOTOS_PROFISSIONAIS = 'fotos-profissionais'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
 const YOUTUBE_UPLOADS_PLAYLIST_ID = 'UUomJ8VZUli9JIv2Cgpzf_DQ'
 const YOUTUBE_PLAYLIST_LIMIT = 50
@@ -118,12 +119,23 @@ type DashboardProfissional = {
   total_clinica: number
 }
 
+type StorageFoto = {
+  name: string
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 export default function PainelProfissional() {
   const router = useRouter()
   const [mesSelecionado, setMesSelecionado] = useState(MESES_LISTA[new Date().getMonth()])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileId, setProfileId] = useState<string | null>(null)
   const [profileEmail, setProfileEmail] = useState('')
+  const [fotoPerfilSrc, setFotoPerfilSrc] = useState('')
+  const [fotoSelecionada, setFotoSelecionada] = useState<File | null>(null)
+  const [fotoPreview, setFotoPreview] = useState('')
+  const [statusFoto, setStatusFoto] = useState('')
+  const [salvandoFoto, setSalvandoFoto] = useState(false)
   const [config, setConfig] = useState<ConfiguracoesMes | null>(null)
   const [realizado, setRealizado] = useState(0)
   const [notaFeedback, setNotaFeedback] = useState(0)
@@ -342,6 +354,17 @@ export default function PainelProfissional() {
   }, [mesSelecionado, profileId, profile, carregar])
 
   useEffect(() => {
+    if (!profileId || !profile) return
+    carregarFotoSalva(profileId)
+  }, [profileId, profile]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    return () => {
+      if (fotoPreview.startsWith('blob:')) URL.revokeObjectURL(fotoPreview)
+    }
+  }, [fotoPreview])
+
+  useEffect(() => {
     const indice = Math.floor(Math.random() * FRASES_MOTIVACIONAIS.length)
     queueMicrotask(() => {
       setFraseMotivacional(FRASES_MOTIVACIONAIS[indice])
@@ -432,6 +455,135 @@ export default function PainelProfissional() {
 
   function fotoProfissional() {
     return FOTOS_PROFISSIONAIS[profile?.primeiro_nome?.toLowerCase() ?? '']
+  }
+
+  function fotoPadraoProfissional() {
+    const foto = fotoProfissional()
+    return foto ? assetPath(foto) : ''
+  }
+
+  async function carregarFotoSalva(uid: string) {
+    const fotoPadrao = fotoPadraoProfissional()
+
+    if (DEMO_MODE) {
+      setFotoPerfilSrc(localStorage.getItem(`foto_profissional_${uid}`) ?? fotoPadrao)
+      return
+    }
+
+    try {
+      const supabase = createClient()
+      const pasta = `${PASTA_FOTOS_PROFISSIONAIS}/${uid}`
+      const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).list(pasta, {
+        limit: 20,
+        sortBy: { column: 'updated_at', order: 'desc' },
+      })
+
+      if (error) throw error
+
+      const arquivo = ((data ?? []) as StorageFoto[])
+        .filter(item => item.name && !item.name.endsWith('/'))
+        .sort((a, b) => new Date(b.updated_at ?? b.created_at ?? 0).getTime() - new Date(a.updated_at ?? a.created_at ?? 0).getTime())[0]
+
+      if (!arquivo) {
+        setFotoPerfilSrc(fotoPadrao)
+        return
+      }
+
+      const caminho = `${pasta}/${arquivo.name}`
+      const { data: signedData, error: signedError } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(caminho, 60 * 60)
+      setFotoPerfilSrc(signedError || !signedData?.signedUrl ? fotoPadrao : signedData.signedUrl)
+    } catch {
+      setFotoPerfilSrc(fotoPadrao)
+    }
+  }
+
+  function selecionarFoto(event: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = event.target.files?.[0] ?? null
+    setStatusFoto('')
+
+    if (!arquivo) {
+      setFotoSelecionada(null)
+      setFotoPreview('')
+      return
+    }
+
+    if (!arquivo.type.startsWith('image/')) {
+      setStatusFoto('Escolha uma imagem nos formatos JPG, PNG ou WEBP.')
+      event.target.value = ''
+      return
+    }
+
+    if (arquivo.size > 5 * 1024 * 1024) {
+      setStatusFoto('A imagem deve ter no máximo 5 MB.')
+      event.target.value = ''
+      return
+    }
+
+    setFotoSelecionada(arquivo)
+    setFotoPreview(URL.createObjectURL(arquivo))
+  }
+
+  async function salvarFotoProfissional() {
+    if (!profileId || !fotoSelecionada) return
+
+    setSalvandoFoto(true)
+    setStatusFoto('')
+
+    try {
+      if (DEMO_MODE) {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const dataUrl = String(reader.result ?? '')
+          localStorage.setItem(`foto_profissional_${profileId}`, dataUrl)
+          setFotoPerfilSrc(dataUrl)
+          setFotoPreview('')
+          setFotoSelecionada(null)
+          setStatusFoto('Foto salva para este acesso de teste.')
+          setSalvandoFoto(false)
+        }
+        reader.onerror = () => {
+          setStatusFoto('Não foi possível ler a imagem selecionada.')
+          setSalvandoFoto(false)
+        }
+        reader.readAsDataURL(fotoSelecionada)
+        return
+      }
+
+      const supabase = createClient()
+      const pasta = `${PASTA_FOTOS_PROFISSIONAIS}/${profileId}`
+      const extensao = fotoSelecionada.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+      const caminho = `${pasta}/perfil-${Date.now()}.${extensao}`
+
+      const { data: fotosAntigas } = await supabase.storage.from(BUCKET_MATERIAIS).list(pasta, { limit: 20 })
+      const caminhosAntigos = (fotosAntigas ?? [])
+        .filter(item => item.name && !item.name.endsWith('/'))
+        .map(item => `${pasta}/${item.name}`)
+      if (caminhosAntigos.length > 0) {
+        await supabase.storage.from(BUCKET_MATERIAIS).remove(caminhosAntigos)
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_MATERIAIS)
+        .upload(caminho, fotoSelecionada, {
+          cacheControl: '3600',
+          contentType: fotoSelecionada.type,
+          upsert: true,
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data: signedData, error: signedError } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(caminho, 60 * 60)
+      if (signedError || !signedData?.signedUrl) throw signedError
+
+      setFotoPerfilSrc(signedData.signedUrl)
+      setFotoPreview('')
+      setFotoSelecionada(null)
+      setStatusFoto('Foto salva com sucesso.')
+    } catch {
+      setStatusFoto('Não foi possível salvar a foto. Verifique as permissões do Storage no Supabase.')
+    } finally {
+      setSalvandoFoto(false)
+    }
   }
 
   async function carregarVisualizacaoPdf(material: MaterialInformativo) {
@@ -631,6 +783,7 @@ export default function PainelProfissional() {
   const autoavaliacaoLiberada = configAutoavaliacaoEstaLiberada(autoavaliacaoConfig)
   const precisaResponderAutoavaliacao = autoavaliacaoLiberada && !autoavaliacaoResposta
   const podeVisualizarDados = !precisaLiberarMateriais && !precisaResponderAutoavaliacao
+  const fotoParaExibir = fotoPreview || fotoPerfilSrc
   const youtubeEmbedUrl = `https://www.youtube-nocookie.com/embed/videoseries?list=${YOUTUBE_UPLOADS_PLAYLIST_ID}&index=${youtubeVideoIndex}&autoplay=1&mute=${youtubeMuted ? '1' : '0'}&playsinline=1&rel=0&controls=1`
   const gruposAutoavaliacao = AUTOAVALIACAO_PERGUNTAS.reduce<Record<string, typeof AUTOAVALIACAO_PERGUNTAS>>((acc, pergunta) => {
     acc[pergunta.grupo] = [...(acc[pergunta.grupo] ?? []), pergunta]
@@ -662,47 +815,74 @@ export default function PainelProfissional() {
 
         <div className="nav-link active">📊 Meu Painel</div>
 
-        {fotoProfissional() && (
-          <div className="professional-photo-panel" style={{ padding: '6px 8px 0', width: '100%' }}>
-            <div style={{
-              position: 'relative',
-              width: '100%',
-              aspectRatio: '4 / 5',
-              borderRadius: 18,
-              overflow: 'hidden',
-              border: '1px solid rgba(244,114,182,0.22)',
-              background: 'rgba(255,255,255,0.04)',
-              boxShadow: '0 18px 48px rgba(0,0,0,0.35)',
-            }}>
-              <Image
-                src={assetPath(fotoProfissional()!)}
+        <div className="professional-photo-panel" style={{ padding: '6px 8px 0', width: '100%' }}>
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            aspectRatio: '4 / 5',
+            borderRadius: 18,
+            overflow: 'hidden',
+            border: '1px solid rgba(244,114,182,0.22)',
+            background: 'rgba(255,255,255,0.04)',
+            boxShadow: '0 18px 48px rgba(0,0,0,0.35)',
+          }}>
+            {fotoParaExibir ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={fotoParaExibir}
                 alt={`Foto de ${profile.primeiro_nome}`}
-                fill
-                sizes="180px"
-                style={{ objectFit: 'cover', objectPosition: 'center top' }}
-                priority
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
               />
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                background: 'linear-gradient(180deg, rgba(8,2,16,0.02) 44%, rgba(8,2,16,0.72) 100%)',
-              }} />
-              <div style={{
-                position: 'absolute',
-                left: 12,
-                right: 12,
-                bottom: 12,
-              }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.45)' }}>
-                  {profile.primeiro_nome}
-                </div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0 }}>
-                  Profissional
-                </div>
+            ) : (
+              <div className="photo-placeholder">
+                {profile.primeiro_nome.slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(180deg, rgba(8,2,16,0.02) 44%, rgba(8,2,16,0.72) 100%)',
+            }} />
+            <div style={{
+              position: 'absolute',
+              left: 12,
+              right: 12,
+              bottom: 12,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.45)' }}>
+                {profile.primeiro_nome}
+              </div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0 }}>
+                Profissional
               </div>
             </div>
           </div>
-        )}
+          <div className="photo-upload-actions">
+            <label className="photo-upload-label" htmlFor="foto-profissional-input">
+              Trocar foto
+            </label>
+            <input
+              id="foto-profissional-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={selecionarFoto}
+              style={{ display: 'none' }}
+            />
+            <button
+              type="button"
+              className="photo-save-button"
+              onClick={salvarFotoProfissional}
+              disabled={!fotoSelecionada || salvandoFoto}
+            >
+              {salvandoFoto ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+          {statusFoto && (
+            <div className="photo-upload-status">
+              {statusFoto}
+            </div>
+          )}
+        </div>
 
         <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
           <div style={{ padding: '0 8px', marginBottom: 12 }}>
