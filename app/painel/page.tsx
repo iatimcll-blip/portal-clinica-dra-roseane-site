@@ -829,6 +829,31 @@ export default function PainelProfissional() {
                 <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 16 }}>
                   Período {folhaPontoProfissional.periodo}. Visualização individual liberada na página {folhaPontoProfissional.pagina} do documento.
                 </p>
+                {folhaPontoProfissional.marcacao_impar && (
+                  <div style={{
+                    display: 'flex',
+                    gap: 14,
+                    alignItems: 'center',
+                    marginBottom: 16,
+                    padding: '18px 20px',
+                    borderRadius: 14,
+                    background: 'rgba(239,68,68,0.14)',
+                    border: '1px solid rgba(239,68,68,0.34)',
+                    color: '#fecaca',
+                  }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 999, display: 'grid', placeItems: 'center', background: '#ef4444', color: '#fff', fontSize: 30, fontWeight: 900, flexShrink: 0 }}>
+                      !
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginBottom: 4 }}>
+                        Procure seu gestor para ajustar seus pontos com erro de marcação
+                      </div>
+                      <div style={{ fontSize: 12, color: '#fecaca' }}>
+                        Dias com marcação ímpar: {folhaPontoProfissional.dias_marcacao_impar.join(', ')}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="responsive-grid professional-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                   {[
                     { label: 'Horas batidas', valor: folhaPontoProfissional.horas_batidas, cor: '#38bdf8' },

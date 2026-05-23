@@ -1305,7 +1305,7 @@ export default function AdminPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                           <thead>
                             <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                              {['Profissional','Periodo','Batidas','Escala','Com abono','Saldo','Faltas','Pagina'].map(h => (
+                              {['Profissional','Periodo','Batidas','Escala','Com abono','Saldo','Faltas','Atenção','Pagina'].map(h => (
                                 <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                               ))}
                             </tr>
@@ -1320,6 +1320,14 @@ export default function AdminPage() {
                                 <td style={{ padding: '12px', fontSize: 13, color: '#c084fc', fontWeight: 700 }}>{folha?.horas_com_abono ?? '-'}</td>
                                 <td style={{ padding: '12px', fontSize: 13, color: (folha?.saldo_minutos ?? 0) >= 0 ? '#4ade80' : '#f87171', fontWeight: 800 }}>{folha?.saldo_periodo ?? '-'}</td>
                                 <td style={{ padding: '12px', fontSize: 13, color: 'rgba(240,230,255,0.65)' }}>{folha?.faltas_horas ?? '-'}</td>
+                                <td style={{ padding: '12px', fontSize: 13, whiteSpace: 'nowrap' }}>
+                                  {folha?.marcacao_impar ? (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#fecaca', fontWeight: 900 }}>
+                                      <span style={{ width: 22, height: 22, borderRadius: 999, background: '#ef4444', color: '#fff', display: 'inline-grid', placeItems: 'center' }}>!</span>
+                                      Marcação ímpar ({folha.dias_marcacao_impar.join(', ')})
+                                    </span>
+                                  ) : '-'}
+                                </td>
                                 <td style={{ padding: '12px', fontSize: 13, color: 'rgba(240,230,255,0.65)' }}>{folha ? `${folha.material_titulo} - pag. ${folha.pagina}` : '-'}</td>
                               </tr>
                             ))}

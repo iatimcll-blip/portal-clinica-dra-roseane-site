@@ -18,6 +18,9 @@ export type FolhaPontoD1 = {
   extras_total: string
   faltas_horas: string
   dias_faltosos: number | null
+  marcacao_impar: boolean
+  dias_marcacao_impar: string[]
+  total_marcacoes_impares: number
 }
 
 function limparTexto(valor: string) {
@@ -104,6 +107,35 @@ function extrairTotais(texto: string, nome: string) {
   return { batidas: ultimo?.[1] ?? '00:00', previstas: ultimo?.[2] ?? '00:00' }
 }
 
+function extrairDiasMarcacaoImpar(linhas: string[]) {
+  const indicePontos = linhas.findIndex(linha => normalizarNomePonto(linha) === 'PONTOS')
+  const linhasPonto = indicePontos >= 0 ? linhas.slice(indicePontos + 1) : linhas
+  const dias: string[] = []
+
+  for (let i = 0; i < linhasPonto.length; i += 1) {
+    const dataMatch = linhasPonto[i].match(/^(\d{2}\/\d{2})$/)
+    if (!dataMatch) continue
+
+    const bloco: string[] = []
+    for (let j = i + 1; j < linhasPonto.length; j += 1) {
+      if (/^\d{2}\/\d{2}$/.test(linhasPonto[j])) break
+      bloco.push(linhasPonto[j])
+    }
+
+    const linhasComMarcacao = bloco.filter(linha => linha.includes('|'))
+    const totalMarcacoes = linhasComMarcacao.reduce((total, linha) => {
+      const horarios = linha.match(/\b\d{1,2}:\d{2}\b/g) ?? []
+      return total + horarios.length
+    }, 0)
+
+    if (totalMarcacoes > 0 && totalMarcacoes % 2 !== 0) {
+      dias.push(dataMatch[1])
+    }
+  }
+
+  return dias
+}
+
 export function analisarPaginasFolhaPontoD1(
   paginas: string[],
   material: Pick<MaterialInformativo, 'id' | 'titulo' | 'file_name'>,
@@ -117,6 +149,7 @@ export function analisarPaginasFolhaPontoD1(
     const horasComAbono = texto.match(/(\d{1,4}:\d{2})\s*Trabalhadas \+ Abono/i)?.[1] ?? totais.batidas
     const saldoMinutos = minutosDeHora(horasComAbono) - minutosDeHora(totais.previstas)
     const diasFaltososMatch = texto.match(/Dias Faltosos:\s*(\d+)/i)
+    const diasMarcacaoImpar = extrairDiasMarcacaoImpar(linhas)
 
     return {
       material_id: material.id,
@@ -134,6 +167,9 @@ export function analisarPaginasFolhaPontoD1(
       extras_total: valorAposRotulo(linhas, 'Total') || '00:00',
       faltas_horas: valorAposRotulo(linhas, 'Faltas em Horas') || '00:00',
       dias_faltosos: diasFaltososMatch ? Number(diasFaltososMatch[1]) : null,
+      marcacao_impar: diasMarcacaoImpar.length > 0,
+      dias_marcacao_impar: diasMarcacaoImpar,
+      total_marcacoes_impares: diasMarcacaoImpar.length,
     }
   }).filter(folha => folha.nome)
 }
