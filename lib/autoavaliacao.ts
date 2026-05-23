@@ -44,3 +44,22 @@ export function calcularMediaAutoavaliacao(notas: Record<string, number>) {
   return Number((valores.reduce((soma, valor) => soma + valor, 0) / valores.length).toFixed(1))
 }
 
+export function normalizarDataAutoavaliacao(valor?: string | null) {
+  if (!valor) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor
+
+  const data = new Date(valor)
+  if (Number.isNaN(data.getTime())) return ''
+
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  const dia = String(data.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
+}
+
+export function formatarDataAutoavaliacao(valor?: string | null) {
+  const iso = normalizarDataAutoavaliacao(valor)
+  if (!iso) return ''
+  const [ano, mes, dia] = iso.split('-')
+  return `${dia}/${mes}/${ano}`
+}

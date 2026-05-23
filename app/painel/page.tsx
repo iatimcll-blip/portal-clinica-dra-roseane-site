@@ -25,7 +25,13 @@ import {
   type AutoavaliacaoConfig,
   type AutoavaliacaoResposta,
 } from '@/lib/google-sheets-sync'
-import { AUTOAVALIACAO_CAMPOS_TEXTO, AUTOAVALIACAO_PERGUNTAS, calcularMediaAutoavaliacao } from '@/lib/autoavaliacao'
+import {
+  AUTOAVALIACAO_CAMPOS_TEXTO,
+  AUTOAVALIACAO_PERGUNTAS,
+  calcularMediaAutoavaliacao,
+  formatarDataAutoavaliacao,
+  normalizarDataAutoavaliacao,
+} from '@/lib/autoavaliacao'
 import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
 import { listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
@@ -94,8 +100,10 @@ function hojeISO() {
 function configAutoavaliacaoEstaLiberada(config: AutoavaliacaoConfig | null) {
   if (!config?.liberado || !config.periodo) return false
   const hoje = hojeISO()
-  const inicioOk = !config.data_inicio || config.data_inicio <= hoje
-  const fimOk = !config.data_fim || config.data_fim >= hoje
+  const dataInicio = normalizarDataAutoavaliacao(config.data_inicio)
+  const dataFim = normalizarDataAutoavaliacao(config.data_fim)
+  const inicioOk = !dataInicio || dataInicio <= hoje
+  const fimOk = !dataFim || dataFim >= hoje
   return inicioOk && fimOk
 }
 
@@ -1079,7 +1087,9 @@ export default function PainelProfissional() {
                 <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Autoavaliação de Desempenho</h3>
                 <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)' }}>
                   Formulário liberado para {autoavaliacaoConfig?.periodo}
-                  {autoavaliacaoConfig?.data_inicio && autoavaliacaoConfig?.data_fim ? `, de ${autoavaliacaoConfig.data_inicio} até ${autoavaliacaoConfig.data_fim}` : ''}.
+                  {autoavaliacaoConfig?.data_inicio && autoavaliacaoConfig?.data_fim
+                    ? `, de ${formatarDataAutoavaliacao(autoavaliacaoConfig.data_inicio)} até ${formatarDataAutoavaliacao(autoavaliacaoConfig.data_fim)}`
+                    : ''}.
                   {' '}Responda de forma reflexiva e registre seus pontos de evolução.
                 </p>
               </div>

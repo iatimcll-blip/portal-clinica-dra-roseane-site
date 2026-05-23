@@ -28,7 +28,7 @@ import {
   type AutoavaliacaoResposta,
   type GoogleSheetsMessageRow,
 } from '@/lib/google-sheets-sync'
-import { AUTOAVALIACAO_CAMPOS_TEXTO, AUTOAVALIACAO_PERGUNTAS } from '@/lib/autoavaliacao'
+import { AUTOAVALIACAO_CAMPOS_TEXTO, AUTOAVALIACAO_PERGUNTAS, formatarDataAutoavaliacao, normalizarDataAutoavaliacao } from '@/lib/autoavaliacao'
 import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
 import { criarCaminhoMaterialStorage, listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
@@ -252,8 +252,8 @@ export default function AdminPage() {
       .then(([configAuto, respostasAuto]) => {
         setAutoavaliacaoConfig(configAuto)
         setPeriodoAutoavaliacao(configAuto.periodo || `Avaliação ${mesSelecionado} 2025`)
-        setDataInicioAutoavaliacao(configAuto.data_inicio || '')
-        setDataFimAutoavaliacao(configAuto.data_fim || '')
+        setDataInicioAutoavaliacao(normalizarDataAutoavaliacao(configAuto.data_inicio))
+        setDataFimAutoavaliacao(normalizarDataAutoavaliacao(configAuto.data_fim))
         setAutoavaliacaoRespostas(respostasAuto)
         setStatusAutoavaliacaoAdmin('')
         setAutoavaliacaoProfileId(atual => atual || (profs?.[0]?.id ?? ''))
@@ -1418,7 +1418,7 @@ export default function AdminPage() {
                     {[
                       { label: 'Status', valor: autoavaliacaoConfig.liberado ? 'Liberado' : 'Encerrado', cor: autoavaliacaoConfig.liberado ? '#4ade80' : '#facc15' },
                       { label: 'Período ativo', valor: autoavaliacaoConfig.periodo || 'Não definido', cor: '#c084fc' },
-                      { label: 'Janela de liberação', valor: autoavaliacaoConfig.data_inicio && autoavaliacaoConfig.data_fim ? `${autoavaliacaoConfig.data_inicio} a ${autoavaliacaoConfig.data_fim}` : 'Sem datas', cor: '#f472b6' },
+                      { label: 'Janela de liberação', valor: autoavaliacaoConfig.data_inicio && autoavaliacaoConfig.data_fim ? `${formatarDataAutoavaliacao(autoavaliacaoConfig.data_inicio)} a ${formatarDataAutoavaliacao(autoavaliacaoConfig.data_fim)}` : 'Sem datas', cor: '#f472b6' },
                       { label: 'Respostas recebidas', valor: `${profissionaisComAutoavaliacao.length}/${profiles.length}`, cor: '#38bdf8' },
                     ].map(item => (
                       <div key={item.label} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,0.03)' }}>

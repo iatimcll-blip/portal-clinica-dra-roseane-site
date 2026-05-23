@@ -330,8 +330,8 @@ function obterAutoavaliacaoConfig_() {
   return {
     liberado: String(row[1] || '').toLowerCase() === 'sim',
     periodo: String(row[2] || ''),
-    data_inicio: String(row[3] || ''),
-    data_fim: String(row[4] || ''),
+    data_inicio: formatarDataISO_(row[3]),
+    data_fim: formatarDataISO_(row[4]),
     liberado_em: String(row[0] || ''),
   }
 }
@@ -558,6 +558,16 @@ function formatarDataHoraBrasil_(valor) {
   }
 
   return Utilities.formatDate(data, 'America/Fortaleza', 'dd/MM/yyyy HH:mm:ss')
+}
+
+function formatarDataISO_(valor) {
+  if (!valor) return ''
+  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor
+
+  var data = valor instanceof Date ? valor : new Date(valor)
+  if (isNaN(data.getTime())) return ''
+
+  return Utilities.formatDate(data, 'America/Fortaleza', 'yyyy-MM-dd')
 }
 
 function prepararColunaDataHora_(sheet) {
