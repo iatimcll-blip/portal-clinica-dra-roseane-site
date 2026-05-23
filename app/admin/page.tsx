@@ -408,6 +408,10 @@ export default function AdminPage() {
     const supabase = createClient()
     const titulo = tituloMaterial.trim() || arquivoMaterial.name
     const filePath = criarCaminhoMaterialStorage(arquivoMaterial, categoriaMaterial, titulo)
+    const substituirFolhaPonto = categoriaMaterial === CATEGORIA_FOLHA_PONTO_D1
+    const materiaisFolhaPontoAnteriores = substituirFolhaPonto
+      ? materiais.filter(material => isFolhaPontoD1(material))
+      : []
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_MATERIAIS)
@@ -422,6 +426,17 @@ export default function AdminPage() {
       return
     }
 
+    if (materiaisFolhaPontoAnteriores.length > 0) {
+      await supabase.storage
+        .from(BUCKET_MATERIAIS)
+        .remove(materiaisFolhaPontoAnteriores.map(material => material.file_path))
+
+      await supabase
+        .from('materiais_informativos')
+        .delete()
+        .in('id', materiaisFolhaPontoAnteriores.map(material => material.id))
+    }
+
     const { error: insertError } = await supabase.from('materiais_informativos').insert({
       titulo,
       descricao: descricaoMaterial.trim() || null,
@@ -434,7 +449,10 @@ export default function AdminPage() {
     })
 
     if (insertError) {
-      setMateriais(await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS))
+      const materiaisStorage = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
+      setMateriais(substituirFolhaPonto
+        ? materiaisStorage.filter(material => !isFolhaPontoD1(material) || material.file_path === filePath)
+        : materiaisStorage)
       setTituloMaterial('')
       setDescricaoMaterial('')
       setCategoriaMaterial(CATEGORIAS_MATERIAIS[0])
