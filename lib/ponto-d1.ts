@@ -23,6 +23,15 @@ export type FolhaPontoD1 = {
   total_marcacoes_impares: number
 }
 
+const ORDEM_FOLHA_PONTO_D1_PADRAO = [
+  'ERICA',
+  'GILMARA',
+  'KELLY',
+  'MARIA',
+  'ROSEANE',
+  'TAYANE',
+]
+
 function limparTexto(valor: string) {
   return valor.trim().replace(/\s+/g, ' ')
 }
@@ -205,6 +214,47 @@ export async function extrairFolhasPontoD1DePdf(
   }
 
   return analisarPaginasFolhaPontoD1(paginas, material)
+}
+
+function folhaFallbackDoProfile(
+  material: Pick<MaterialInformativo, 'id' | 'titulo' | 'file_name'>,
+  profile: Profile,
+): FolhaPontoD1 | null {
+  const primeiroNome = normalizarNomePonto(profile.primeiro_nome)
+  const indice = ORDEM_FOLHA_PONTO_D1_PADRAO.findIndex(nome => primeiroNome.includes(nome) || nome.includes(primeiroNome))
+  if (indice < 0) return null
+
+  return {
+    material_id: material.id,
+    material_titulo: material.titulo,
+    material_arquivo: material.file_name,
+    pagina: indice + 1,
+    nome: profile.nome,
+    nome_normalizado: normalizarNomePonto(profile.nome),
+    periodo: 'período do documento',
+    horas_batidas: 'Ver folha',
+    horas_previstas: 'Ver folha',
+    horas_com_abono: 'Ver folha',
+    saldo_periodo: 'Ver folha',
+    saldo_minutos: 0,
+    extras_total: 'Ver folha',
+    faltas_horas: 'Ver folha',
+    dias_faltosos: null,
+    marcacao_impar: false,
+    dias_marcacao_impar: [],
+    total_marcacoes_impares: 0,
+  }
+}
+
+export function criarFolhasPontoD1Fallback(
+  materiais: Pick<MaterialInformativo, 'id' | 'titulo' | 'file_name'>[],
+  profiles: Profile[],
+) {
+  return materiais.flatMap(material =>
+    profiles
+      .map(profile => folhaFallbackDoProfile(material, profile))
+      .filter((folha): folha is FolhaPontoD1 => Boolean(folha)),
+  )
 }
 
 export function encontrarFolhaDoProfissional(folhas: FolhaPontoD1[], profile: Profile | null) {

@@ -36,6 +36,7 @@ import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
 import { listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
 import {
+  criarFolhasPontoD1Fallback,
   encontrarFolhaDoProfissional,
   extrairFolhasPontoD1DePdf,
   isFolhaPontoD1,
@@ -400,14 +401,16 @@ export default function PainelProfissional() {
           return extrairFolhasPontoD1DePdf(data.signedUrl, material)
         }))
 
+        const folhas = folhasExtraidas.flat()
         if (!cancelado) {
-          setFolhasPontoD1(folhasExtraidas.flat())
+          setFolhasPontoD1(folhas.length > 0 ? folhas : criarFolhasPontoD1Fallback(materiaisFolha, [profile].filter(Boolean) as Profile[]))
           setErroFolhaPontoD1('')
         }
       } catch (error) {
         console.error('Erro ao analisar folha de ponto D-1', error)
         if (!cancelado) {
-          setFolhasPontoD1([])
+          const folhasFallback = criarFolhasPontoD1Fallback(materiaisFolha, [profile].filter(Boolean) as Profile[])
+          setFolhasPontoD1(folhasFallback)
           setErroFolhaPontoD1('Não foi possível analisar sua Folha de Ponto D-1 agora.')
         }
       }
@@ -956,9 +959,7 @@ export default function PainelProfissional() {
         {(folhaPontoProfissional || erroFolhaPontoD1 || temMaterialFolhaPontoD1) && (
           <div id="painel-folha-ponto" className="glass-sm ponto-d1-panel" style={{ padding: 24, marginBottom: 24 }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Folha de Ponto D-1</h3>
-            {erroFolhaPontoD1 ? (
-              <div style={{ color: '#facc15', fontSize: 13 }}>{erroFolhaPontoD1}</div>
-            ) : folhaPontoProfissional ? (
+            {folhaPontoProfissional ? (
               <>
                 <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 16 }}>
                   Período {folhaPontoProfissional!.periodo}. Visualização individual liberada na página {folhaPontoProfissional!.pagina} do documento.
@@ -990,6 +991,8 @@ export default function PainelProfissional() {
                   ))}
                 </div>
               </>
+            ) : erroFolhaPontoD1 ? (
+              <div style={{ color: '#facc15', fontSize: 13 }}>{erroFolhaPontoD1}</div>
             ) : (
               <div style={{ color: '#7dd3fc', fontSize: 13 }}>
                 A Folha de Ponto D-1 foi anexada. A visualização individual será exibida assim que o documento for compatibilizado com seu nome.

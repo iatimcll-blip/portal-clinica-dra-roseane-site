@@ -34,6 +34,7 @@ import { criarCaminhoMaterialStorage, listarMateriaisDoStorage } from '@/lib/mat
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
 import {
   CATEGORIA_FOLHA_PONTO_D1,
+  criarFolhasPontoD1Fallback,
   encontrarFolhaDoProfissional,
   extrairFolhasPontoD1DePdf,
   isFolhaPontoD1,
@@ -294,14 +295,15 @@ export default function AdminPage() {
           return extrairFolhasPontoD1DePdf(data.signedUrl, material)
         }))
 
+        const folhas = folhasExtraidas.flat()
         if (!cancelado) {
-          setFolhasPontoD1(folhasExtraidas.flat())
+          setFolhasPontoD1(folhas.length > 0 ? folhas : criarFolhasPontoD1Fallback(materiaisFolha, profiles))
           setErroFolhaPontoD1('')
         }
       } catch (error) {
         console.error('Erro ao analisar folha de ponto D-1', error)
         if (!cancelado) {
-          setFolhasPontoD1([])
+          setFolhasPontoD1(criarFolhasPontoD1Fallback(materiaisFolha, profiles))
           setErroFolhaPontoD1('Não foi possível analisar a Folha de Ponto D-1 agora.')
         }
       }
@@ -309,7 +311,7 @@ export default function AdminPage() {
 
     carregarFolhasPonto()
     return () => { cancelado = true }
-  }, [materiais])
+  }, [materiais, profiles])
 
   useEffect(() => {
     queueMicrotask(() => setYoutubeVideoIndex(0))
