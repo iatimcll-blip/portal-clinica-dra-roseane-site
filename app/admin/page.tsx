@@ -54,6 +54,24 @@ const EXTENSOES_MATERIAIS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
 const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos', CATEGORIA_FOLHA_PONTO_D1, CATEGORIA_LINK]
 const PREFIXO_DESTINOS_MATERIAL = 'targets__'
 
+const SQL_MIGRACAO_LINKS = `ALTER TABLE public.materiais_informativos
+  ADD COLUMN IF NOT EXISTS profile_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS target_profile_ids UUID[],
+  ADD COLUMN IF NOT EXISTS link_url TEXT;
+
+DROP POLICY IF EXISTS "authenticated_read_active_materials" ON public.materiais_informativos;
+
+CREATE POLICY "authenticated_read_active_materials"
+  ON public.materiais_informativos FOR SELECT TO authenticated
+  USING (
+    ativo = true AND (
+      (profile_id IS NULL AND (target_profile_ids IS NULL OR cardinality(target_profile_ids) = 0))
+      OR auth.uid() = ANY(target_profile_ids)
+      OR profile_id = auth.uid()
+      OR public.is_admin_or_gestao()
+    )
+  );`
+
 function chaveLeiturasLocais(profileId: string) {
   return `leituras_materiais_${profileId}`
 }
@@ -108,6 +126,7 @@ export default function AdminPage() {
   const [salvandoMaterial, setSalvandoMaterial] = useState(false)
   const [mensagemMaterial, setMensagemMaterial] = useState('')
   const [erroMaterial, setErroMaterial] = useState('')
+  const [mostrarSqlMigracao, setMostrarSqlMigracao] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
   const [materialParaTodas, setMaterialParaTodas] = useState(true)
   const [profileIdsMaterial, setProfileIdsMaterial] = useState<string[]>([])
@@ -371,7 +390,8 @@ export default function AdminPage() {
 
   function mensagemErroMateriais(message?: string, code?: string) {
     if (erroColunasDestinoMaterial(message, code)) {
-      return 'Atualize o Supabase com o arquivo supabase/fix_materiais_individual_links.sql para liberar links e envio por profissional.'
+      setMostrarSqlMigracao(true)
+      return 'Execute o SQL abaixo no Supabase SQL Editor para liberar links e envio por profissional.'
     }
     if (message?.toLowerCase().includes('row-level security')) {
       return 'O Supabase bloqueou a ação pelas regras de acesso. O sistema tentará usar o armazenamento alternativo para liberar o material.'
@@ -486,7 +506,7 @@ export default function AdminPage() {
       const titulo = tituloMaterial.trim() || 'Link informativo'
       const filePath = anexarDestinosAoCaminho(`link__${Date.now()}__${crypto.randomUUID()}`, destinoMaterial.targetProfileIds)
 
-      const payloadLink = {
+      const payloadLinkBase = {
         titulo,
         descricao: descricaoMaterial.trim() || null,
         categoria: CATEGORIA_LINK,
@@ -497,13 +517,20 @@ export default function AdminPage() {
         ativo: true,
       }
 
-      let { error: insertError } = await supabase.from('materiais_informativos').insert(payloadLink)
+      const payloadLinkCompleto = {
+        ...payloadLinkBase,
+        link_url: url,
+        target_profile_ids: destinoMaterial.targetProfileIds ?? [],
+      }
 
-      if (insertError && erroColunasDestinoMaterial(insertError.message, insertError.code) && !destinoMaterial.targetProfileIds) {
-        ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadLink))
+      let { error: insertError } = await supabase.from('materiais_informativos').insert(payloadLinkCompleto)
+
+      if (insertError && erroColunasDestinoMaterial(insertError.message, insertError.code)) {
+        ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadLinkBase))
       }
 
       if (insertError) {
+        console.error('[link-insert]', insertError)
         setErroMaterial(mensagemErroMateriais(insertError.message, insertError.code))
         setSalvandoMaterial(false)
         return
@@ -567,7 +594,7 @@ export default function AdminPage() {
         .in('id', materiaisFolhaPontoAnteriores.map(material => material.id))
     }
 
-    const payloadMaterial = {
+    const payloadMaterialBase = {
       titulo,
       descricao: descricaoMaterial.trim() || null,
       categoria: categoriaMaterial,
@@ -578,10 +605,15 @@ export default function AdminPage() {
       ativo: true,
     }
 
-    let { error: insertError } = await supabase.from('materiais_informativos').insert(payloadMaterial)
+    const payloadMaterialCompleto = {
+      ...payloadMaterialBase,
+      target_profile_ids: destinoMaterial.targetProfileIds ?? [],
+    }
 
-    if (insertError && erroColunasDestinoMaterial(insertError.message, insertError.code) && !destinoMaterial.targetProfileIds) {
-      ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadMaterial))
+    let { error: insertError } = await supabase.from('materiais_informativos').insert(payloadMaterialCompleto)
+
+    if (insertError && erroColunasDestinoMaterial(insertError.message, insertError.code)) {
+      ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadMaterialBase))
     }
 
     if (insertError) {
@@ -1519,6 +1551,23 @@ export default function AdminPage() {
                     {erroMaterial && (
                       <div style={{ marginTop: 14, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#f87171' }}>
                         {erroMaterial}
+                        {mostrarSqlMigracao && (
+                          <div style={{ marginTop: 12 }}>
+                            <pre style={{ background: 'rgba(0,0,0,0.35)', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginBottom: 8 }}>
+                              {SQL_MIGRACAO_LINKS}
+                            </pre>
+                            <button
+                              type="button"
+                              onClick={() => { navigator.clipboard.writeText(SQL_MIGRACAO_LINKS).catch(() => {}) }}
+                              style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 6, padding: '5px 12px', fontSize: 12, color: '#fca5a5', cursor: 'pointer' }}
+                            >
+                              Copiar SQL
+                            </button>
+                            <span style={{ marginLeft: 10, fontSize: 11, color: 'rgba(240,230,255,0.5)' }}>
+                              Cole e execute no Supabase → SQL Editor → New query
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                     {mensagemMaterial && (
