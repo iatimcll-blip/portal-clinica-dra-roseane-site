@@ -470,7 +470,7 @@ export default function AdminPage() {
       const titulo = tituloMaterial.trim() || 'Link informativo'
       const filePath = `link__${Date.now()}__${crypto.randomUUID()}`
 
-      const payloadLink = {
+      const payloadLinkBase = {
         titulo,
         descricao: descricaoMaterial.trim() || null,
         categoria: CATEGORIA_LINK,
@@ -479,25 +479,19 @@ export default function AdminPage() {
         file_type: null,
         file_size: null,
         ativo: true,
-        link_url: url,
-        profile_id: destinoMaterial.profileIdCompat,
-        target_profile_ids: destinoMaterial.targetProfileIds,
       }
+      const payloadLink = destinoMaterial.targetProfileIds
+        ? {
+          ...payloadLinkBase,
+          profile_id: destinoMaterial.profileIdCompat,
+          ...(destinoMaterial.targetProfileIds.length > 1 ? { target_profile_ids: destinoMaterial.targetProfileIds } : {}),
+        }
+        : payloadLinkBase
 
       let { error: insertError } = await supabase.from('materiais_informativos').insert(payloadLink)
 
       if (insertError && erroColunasDestinoMaterial(insertError.message, insertError.code) && !destinoMaterial.targetProfileIds) {
-        const payloadCompat = {
-          titulo,
-          descricao: descricaoMaterial.trim() || null,
-          categoria: CATEGORIA_LINK,
-          file_name: url,
-          file_path: filePath,
-          file_type: null,
-          file_size: null,
-          ativo: true,
-        }
-        ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadCompat))
+        ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadLinkBase))
       }
 
       if (insertError) {
@@ -561,7 +555,7 @@ export default function AdminPage() {
         .in('id', materiaisFolhaPontoAnteriores.map(material => material.id))
     }
 
-    const payloadMaterial = {
+    const payloadMaterialBase = {
       titulo,
       descricao: descricaoMaterial.trim() || null,
       categoria: categoriaMaterial,
@@ -570,24 +564,19 @@ export default function AdminPage() {
       file_type: arquivoMaterial.type || null,
       file_size: arquivoMaterial.size,
       ativo: true,
-      profile_id: destinoMaterial.profileIdCompat,
-      target_profile_ids: destinoMaterial.targetProfileIds,
     }
+    const payloadMaterial = destinoMaterial.targetProfileIds
+      ? {
+        ...payloadMaterialBase,
+        profile_id: destinoMaterial.profileIdCompat,
+        ...(destinoMaterial.targetProfileIds.length > 1 ? { target_profile_ids: destinoMaterial.targetProfileIds } : {}),
+      }
+      : payloadMaterialBase
 
     let { error: insertError } = await supabase.from('materiais_informativos').insert(payloadMaterial)
 
     if (insertError && erroColunasDestinoMaterial(insertError.message, insertError.code) && !destinoMaterial.targetProfileIds) {
-      const payloadCompat = {
-        titulo,
-        descricao: descricaoMaterial.trim() || null,
-        categoria: categoriaMaterial,
-        file_name: arquivoMaterial.name,
-        file_path: filePath,
-        file_type: arquivoMaterial.type || null,
-        file_size: arquivoMaterial.size,
-        ativo: true,
-      }
-      ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadCompat))
+      ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadMaterialBase))
     }
 
     if (insertError) {
