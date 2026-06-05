@@ -67,6 +67,7 @@ export type MaterialInformativo = {
   ativo: boolean
   created_at: string
   profile_id?: string | null
+  target_profile_ids?: string[] | null
   link_url?: string | null
 }
 

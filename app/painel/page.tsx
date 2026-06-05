@@ -275,7 +275,7 @@ export default function PainelProfissional() {
       if (materiaisError) materiaisCarregados = []
     }
 
-    const materiaisDaProfissional = materiaisCarregados.filter(material => !material.profile_id || material.profile_id === uid)
+    const materiaisDaProfissional = materiaisCarregados.filter(material => materialLiberadoParaProfile(material, uid))
     setMateriais(materiaisDaProfissional)
     const leiturasDoBanco = ((leiturasData ?? []) as MaterialLeitura[]).reduce<Record<number, string>>((acc, leitura) => {
       acc[leitura.material_id] = leitura.read_at
@@ -460,6 +460,18 @@ export default function PainelProfissional() {
 
   function isLinkMaterial(material: MaterialInformativo) {
     return (material.categoria ?? '').toLowerCase() === 'links' || (material.categoria ?? '').toLowerCase() === 'link'
+  }
+
+  function urlDoMaterialLink(material: MaterialInformativo) {
+    const url = material.link_url || material.file_name
+    return /^https?:\/\/.+/.test(url) ? url : ''
+  }
+
+  function materialLiberadoParaProfile(material: MaterialInformativo, uid: string) {
+    if (Array.isArray(material.target_profile_ids) && material.target_profile_ids.length > 0) {
+      return material.target_profile_ids.includes(uid)
+    }
+    return !material.profile_id || material.profile_id === uid
   }
 
   function fotoProfissional() {
@@ -1254,6 +1266,7 @@ export default function PainelProfissional() {
                   const materialAberto = visualizadorPdf?.materialId === material.id
                   const chegouAoFinal = Boolean(materialAberto && totalPaginasPdf > 0 && visualizadorPdf && visualizadorPdf.pagina >= totalPaginasPdf)
                   const linkAberto = isLinkMaterial(material) && linksAbertos.has(material.id)
+                  const linkMaterial = urlDoMaterialLink(material)
                   const podeConfirmarCiencia = Boolean(lidoEm) || chegouAoFinal || linkAberto
                   return (
                     <div key={material.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
@@ -1269,9 +1282,9 @@ export default function PainelProfissional() {
                       </div>
                       <div className="material-actions">
                         {isLinkMaterial(material) ? (
-                          material.link_url ? (
+                          linkMaterial ? (
                             <a
-                              href={material.link_url}
+                              href={linkMaterial}
                               target="_blank"
                               rel="noreferrer"
                               onClick={() => setLinksAbertos(prev => new Set([...prev, material.id]))}
