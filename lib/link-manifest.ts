@@ -26,7 +26,8 @@ async function lerManifest(supabase: SupabaseClient, bucket: string): Promise<Li
 
 async function gravarManifest(supabase: SupabaseClient, bucket: string, links: LinkEntry[]): Promise<void> {
   const blob = new Blob([JSON.stringify(links)], { type: 'application/json' })
-  await supabase.storage.from(bucket).upload(MANIFEST_PATH, blob, { upsert: true })
+  const { error } = await supabase.storage.from(bucket).upload(MANIFEST_PATH, blob, { upsert: true })
+  if (error) throw error
 }
 
 export function isMaterialManifest(material: Pick<MaterialInformativo, 'file_path'>) {

@@ -30,7 +30,7 @@ import {
 } from '@/lib/google-sheets-sync'
 import { AUTOAVALIACAO_CAMPOS_TEXTO, AUTOAVALIACAO_PERGUNTAS, formatarDataAutoavaliacao, normalizarDataAutoavaliacao } from '@/lib/autoavaliacao'
 import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
-import { criarCaminhoMaterialStorage, listarMateriaisDoStorage } from '@/lib/materiais-storage'
+import { criarCaminhoLinkStorage, criarCaminhoMaterialStorage, listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
 import { adicionarLinkManifest, isMaterialManifest, listarLinksManifest, removerLinkManifest } from '@/lib/link-manifest'
 import {
@@ -543,10 +543,26 @@ export default function AdminPage() {
             url,
             targetProfileIds: destinoMaterial.targetProfileIds,
           })
-        } catch {
-          setErroMaterial(mensagemErroMateriais(insertError.message, insertError.code))
-          setSalvandoMaterial(false)
-          return
+        } catch (manifestError) {
+          const caminhoLinkStorage = anexarDestinosAoCaminho(
+            criarCaminhoLinkStorage(url, CATEGORIA_LINK, titulo),
+            destinoMaterial.targetProfileIds,
+          )
+          const arquivoLink = new Blob([url], { type: 'text/uri-list' })
+          const { error: uploadLinkError } = await supabase.storage
+            .from(BUCKET_MATERIAIS)
+            .upload(caminhoLinkStorage, arquivoLink, {
+              contentType: 'text/uri-list',
+              upsert: false,
+            })
+
+          if (uploadLinkError) {
+            console.error('[link-manifest]', manifestError)
+            console.error('[link-storage]', uploadLinkError)
+            setErroMaterial(`${mensagemErroMateriais(insertError.message, insertError.code)} Falha no armazenamento alternativo: ${uploadLinkError.message}`)
+            setSalvandoMaterial(false)
+            return
+          }
         }
       }
 
