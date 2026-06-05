@@ -35,6 +35,7 @@ import {
 import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
 import { listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
+import { listarLinksManifest } from '@/lib/link-manifest'
 import {
   criarFolhasPontoD1Fallback,
   encontrarFolhaDoProfissional,
@@ -273,10 +274,14 @@ export default function PainelProfissional() {
     let materiaisCarregados = materiaisData ?? []
     let erroMateriaisAtual = materiaisError ? 'Materiais informativos ainda não configurados no Supabase.' : ''
     try {
-      const materiaisStorage = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
-      if (materiaisStorage.length > 0) {
+      const [materiaisStorage, linksManifest] = await Promise.all([
+        listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS),
+        listarLinksManifest(supabase, BUCKET_MATERIAIS),
+      ])
+      const extras = [...materiaisStorage, ...linksManifest]
+      if (extras.length > 0) {
         const materiaisPorCaminho = new Map<string, MaterialInformativo>()
-        ;[...materiaisCarregados, ...materiaisStorage].forEach(material => {
+        ;[...materiaisCarregados, ...extras].forEach(material => {
           materiaisPorCaminho.set(material.file_path, material)
         })
         materiaisCarregados = Array.from(materiaisPorCaminho.values())

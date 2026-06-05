@@ -32,6 +32,7 @@ import { AUTOAVALIACAO_CAMPOS_TEXTO, AUTOAVALIACAO_PERGUNTAS, formatarDataAutoav
 import { compatibilizarLeiturasGoogleSheets, type CompatibilizacaoLeituras } from '@/lib/material-read-compat'
 import { criarCaminhoMaterialStorage, listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
+import { adicionarLinkManifest, isMaterialManifest, listarLinksManifest, removerLinkManifest } from '@/lib/link-manifest'
 import {
   CATEGORIA_FOLHA_PONTO_D1,
   criarFolhasPontoD1Fallback,
@@ -217,10 +218,14 @@ export default function AdminPage() {
     let materiaisCarregados = mats ?? []
     let erroMateriaisAtual = matsError ? mensagemErroMateriais(matsError.message, matsError.code) : ''
     try {
-      const materiaisStorage = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
-      if (materiaisStorage.length > 0) {
+      const [materiaisStorage, linksManifest] = await Promise.all([
+        listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS),
+        listarLinksManifest(supabase, BUCKET_MATERIAIS),
+      ])
+      const extras = [...materiaisStorage, ...linksManifest]
+      if (extras.length > 0) {
         const materiaisPorCaminho = new Map<string, MaterialInformativo>()
-        ;[...materiaisCarregados, ...materiaisStorage].forEach(material => {
+        ;[...materiaisCarregados, ...extras].forEach(material => {
           materiaisPorCaminho.set(material.file_path, material)
         })
         materiaisCarregados = Array.from(materiaisPorCaminho.values())
@@ -531,9 +536,18 @@ export default function AdminPage() {
 
       if (insertError) {
         console.error('[link-insert]', insertError)
-        setErroMaterial(mensagemErroMateriais(insertError.message, insertError.code))
-        setSalvandoMaterial(false)
-        return
+        try {
+          await adicionarLinkManifest(supabase, BUCKET_MATERIAIS, {
+            titulo,
+            descricao: descricaoMaterial.trim() || null,
+            url,
+            targetProfileIds: destinoMaterial.targetProfileIds,
+          })
+        } catch {
+          setErroMaterial(mensagemErroMateriais(insertError.message, insertError.code))
+          setSalvandoMaterial(false)
+          return
+        }
       }
 
       setTituloMaterial('')
@@ -653,8 +667,12 @@ export default function AdminPage() {
     if (!confirm(`Remover o material "${material.titulo}"?`)) return
 
     const supabase = createClient()
-    await supabase.from('materiais_informativos').delete().eq('id', material.id)
-    await supabase.storage.from(BUCKET_MATERIAIS).remove([material.file_path])
+    if (isMaterialManifest(material)) {
+      await removerLinkManifest(supabase, BUCKET_MATERIAIS, material.id)
+    } else {
+      await supabase.from('materiais_informativos').delete().eq('id', material.id)
+      await supabase.storage.from(BUCKET_MATERIAIS).remove([material.file_path])
+    }
     setMensagemMaterial('Material removido.')
     await carregarDados()
   }
