@@ -45,12 +45,13 @@ type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais' | 'autoavaliacao'
 type PerfilAdmin = 'admin' | 'gestao'
 
 const BUCKET_MATERIAIS = 'materiais-informativos'
+const CATEGORIA_LINK = 'Links'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
 const YOUTUBE_UPLOADS_PLAYLIST_ID = 'UUomJ8VZUli9JIv2Cgpzf_DQ'
 const YOUTUBE_PLAYLIST_LIMIT = 50
 const LIMITE_MATERIAL_BYTES = 50 * 1024 * 1024
 const EXTENSOES_MATERIAIS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'csv', 'mp4', 'mov', 'zip']
-const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos', CATEGORIA_FOLHA_PONTO_D1]
+const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos', CATEGORIA_FOLHA_PONTO_D1, CATEGORIA_LINK]
 
 function chaveLeiturasLocais(profileId: string) {
   return `leituras_materiais_${profileId}`
@@ -90,6 +91,8 @@ export default function AdminPage() {
   const [salvandoMaterial, setSalvandoMaterial] = useState(false)
   const [mensagemMaterial, setMensagemMaterial] = useState('')
   const [erroMaterial, setErroMaterial] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
+  const [profileIdMaterial, setProfileIdMaterial] = useState('')
   const [perfilAdmin, setPerfilAdmin] = useState<PerfilAdmin>('admin')
   const [profileIdAtual, setProfileIdAtual] = useState('')
   const [emailAtual, setEmailAtual] = useState('')
@@ -395,6 +398,57 @@ export default function AdminPage() {
       return
     }
 
+    const isLink = categoriaMaterial === CATEGORIA_LINK
+
+    if (isLink) {
+      const url = linkUrl.trim()
+      if (!url) {
+        setErroMaterial('Informe a URL do link.')
+        return
+      }
+      if (!/^https?:\/\/.+/.test(url)) {
+        setErroMaterial('A URL deve começar com http:// ou https://')
+        return
+      }
+
+      setSalvandoMaterial(true)
+      const supabase = createClient()
+      const titulo = tituloMaterial.trim() || 'Link informativo'
+      const filePath = `link__${Date.now()}__${crypto.randomUUID()}`
+
+      const { error: insertError } = await supabase.from('materiais_informativos').insert({
+        titulo,
+        descricao: descricaoMaterial.trim() || null,
+        categoria: CATEGORIA_LINK,
+        file_name: url,
+        file_path: filePath,
+        file_type: null,
+        file_size: null,
+        ativo: true,
+        link_url: url,
+        profile_id: profileIdMaterial || null,
+      })
+
+      if (insertError) {
+        setErroMaterial(mensagemErroMateriais(insertError.message, insertError.code))
+        setSalvandoMaterial(false)
+        return
+      }
+
+      setTituloMaterial('')
+      setDescricaoMaterial('')
+      setCategoriaMaterial(CATEGORIAS_MATERIAIS[0])
+      setLinkUrl('')
+      setProfileIdMaterial('')
+      const destino = profileIdMaterial
+        ? `profissional selecionada`
+        : 'todas as profissionais'
+      setMensagemMaterial(`Link publicado para ${destino}.`)
+      setSalvandoMaterial(false)
+      await carregarDados()
+      return
+    }
+
     if (!arquivoMaterial) {
       setErroMaterial('Selecione um arquivo para anexar.')
       return
@@ -448,6 +502,7 @@ export default function AdminPage() {
       file_type: arquivoMaterial.type || null,
       file_size: arquivoMaterial.size,
       ativo: true,
+      profile_id: profileIdMaterial || null,
     })
 
     if (insertError) {
@@ -459,6 +514,7 @@ export default function AdminPage() {
       setDescricaoMaterial('')
       setCategoriaMaterial(CATEGORIAS_MATERIAIS[0])
       setArquivoMaterial(null)
+      setProfileIdMaterial('')
       setMensagemMaterial('Material anexado pelo armazenamento alternativo. A Folha D-1 será analisada por nome e liberada individualmente.')
       setErroMaterial('')
       setSalvandoMaterial(false)
@@ -469,7 +525,9 @@ export default function AdminPage() {
     setDescricaoMaterial('')
     setCategoriaMaterial(CATEGORIAS_MATERIAIS[0])
     setArquivoMaterial(null)
-    setMensagemMaterial('Material anexado e liberado para as profissionais.')
+    setProfileIdMaterial('')
+    const destino = profileIdMaterial ? 'profissional selecionada' : 'as profissionais'
+    setMensagemMaterial(`Material anexado e liberado para ${destino}.`)
     setSalvandoMaterial(false)
     await carregarDados()
   }
@@ -485,6 +543,15 @@ export default function AdminPage() {
   }
 
   async function handleAbrirMaterial(material: MaterialInformativo) {
+    if (isLinkMaterial(material)) {
+      if (material.link_url) {
+        window.open(material.link_url, '_blank', 'noopener,noreferrer')
+      } else {
+        setErroMaterial('Este material não possui URL configurada.')
+      }
+      return
+    }
+
     const supabase = createClient()
     const { data, error } = await supabase.storage.from(BUCKET_MATERIAIS).createSignedUrl(material.file_path, 60 * 10)
 
@@ -498,6 +565,10 @@ export default function AdminPage() {
 
   function isPdfMaterial(material: MaterialInformativo) {
     return material.file_type === 'application/pdf' || material.file_name.toLowerCase().endsWith('.pdf')
+  }
+
+  function isLinkMaterial(material: MaterialInformativo) {
+    return (material.categoria ?? '').toLowerCase() === 'links' || (material.categoria ?? '').toLowerCase() === 'link'
   }
 
   async function carregarVisualizacaoPdf(material: MaterialInformativo) {
@@ -673,23 +744,43 @@ export default function AdminPage() {
   const mediaFeedback = notasFeedback.length > 0 ? notasFeedback.reduce((s, nota) => s + nota, 0) / notasFeedback.length : 0
   const abaixoDoGatilho = rankingMensal.filter(p => p.realizado < cfg.meta_gatilho).length
   const pertoDaMeta = rankingMensal.filter(p => p.pctMeta >= 80 && p.pctMeta < 100).length
-  const materiaisObrigatorios = materiais.filter(material => material.ativo && isPdfMaterial(material) && exigeCienciaMaterial(material))
   const idsProfissionais = new Set(profiles.map(profile => profile.id))
+  const materiaisObrigatorios = materiais.filter(material =>
+    material.ativo
+    && (isPdfMaterial(material) || isLinkMaterial(material))
+    && exigeCienciaMaterial(material)
+    && (!material.profile_id || idsProfissionais.has(material.profile_id)),
+  )
   const idsMateriaisObrigatorios = new Set(materiaisObrigatorios.map(material => material.id))
   const leiturasContagemSheets = resumoLeiturasGoogle?.leituras ?? []
   const contagemSheetsDisponivel = Boolean(resumoLeiturasGoogle)
+  const idsProfissionaisAlvoMaterial = (material: MaterialInformativo) => (
+    material.profile_id && idsProfissionais.has(material.profile_id)
+      ? new Set([material.profile_id])
+      : idsProfissionais
+  )
   const assinaturasUnicas = new Set(
     leiturasContagemSheets
-      .filter(leitura => idsProfissionais.has(leitura.profile_id) && idsMateriaisObrigatorios.has(leitura.material_id))
+      .filter(leitura => {
+        if (!idsMateriaisObrigatorios.has(leitura.material_id)) return false
+        const material = materiaisObrigatorios.find(item => item.id === leitura.material_id)
+        return Boolean(material && idsProfissionaisAlvoMaterial(material).has(leitura.profile_id))
+      })
       .map(leitura => `${leitura.profile_id}:${leitura.material_id}`),
   )
   const totalLeituras = assinaturasUnicas.size
-  const totalLeiturasPossiveis = materiaisObrigatorios.length * profiles.length
+  const totalLeiturasPossiveis = materiaisObrigatorios.reduce((total, material) => total + idsProfissionaisAlvoMaterial(material).size, 0)
   const profissionaisComCienciaCompletaLista = profiles.filter(profile =>
-    materiaisObrigatorios.length > 0 && materiaisObrigatorios.every(material => assinaturasUnicas.has(`${profile.id}:${material.id}`)),
+    materiaisObrigatorios.some(material => idsProfissionaisAlvoMaterial(material).has(profile.id))
+    && materiaisObrigatorios
+      .filter(material => idsProfissionaisAlvoMaterial(material).has(profile.id))
+      .every(material => assinaturasUnicas.has(`${profile.id}:${material.id}`)),
   )
   const profissionaisPendentesCienciaLista = profiles.filter(profile =>
-    materiaisObrigatorios.length > 0 && !materiaisObrigatorios.every(material => assinaturasUnicas.has(`${profile.id}:${material.id}`)),
+    materiaisObrigatorios.some(material => idsProfissionaisAlvoMaterial(material).has(profile.id))
+    && !materiaisObrigatorios
+      .filter(material => idsProfissionaisAlvoMaterial(material).has(profile.id))
+      .every(material => assinaturasUnicas.has(`${profile.id}:${material.id}`)),
   )
   const profissionaisComCienciaCompleta = profissionaisComCienciaCompletaLista.length
   const totalMensagensRecebidas = mensagensRecebidas.length
@@ -730,10 +821,11 @@ export default function AdminPage() {
     return material.categoria || 'Comunicados'
   }
 
-  function totalLeiturasMaterial(materialId: number) {
+  function totalLeiturasMaterial(material: MaterialInformativo) {
+    const idsAlvo = idsProfissionaisAlvoMaterial(material)
     return new Set(
       leiturasContagemSheets
-        .filter(leitura => leitura.material_id === materialId && idsProfissionais.has(leitura.profile_id))
+        .filter(leitura => leitura.material_id === material.id && idsAlvo.has(leitura.profile_id))
         .map(leitura => leitura.profile_id),
     ).size
   }
@@ -1244,35 +1336,61 @@ export default function AdminPage() {
 
                 {podeEditar ? (
                   <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                    <form onSubmit={handleUploadMaterial} className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.2fr 0.9fr 1.2fr auto', gap: 12, alignItems: 'end' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Título</label>
-                      <input className="input-field" value={tituloMaterial} onChange={e => setTituloMaterial(e.target.value)} placeholder="Ex.: Protocolo de atendimento" />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Resumo</label>
-                      <input className="input-field" value={descricaoMaterial} onChange={e => setDescricaoMaterial(e.target.value)} placeholder="Descrição breve para as profissionais" />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Categoria</label>
-                      <select className="input-field" value={categoriaMaterial} onChange={e => setCategoriaMaterial(e.target.value)}>
-                        {CATEGORIAS_MATERIAIS.map(categoria => (
-                          <option key={categoria} value={categoria} style={{ background: '#1a0a2e' }}>{categoria}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Arquivo</label>
-                      <input
-                        type="file"
-                        className="input-field"
-                        onChange={e => setArquivoMaterial(e.target.files?.[0] ?? null)}
-                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.txt,.csv,.mp4,.mov,.zip"
-                      />
-                    </div>
-                    <button type="submit" className="btn-primary" disabled={salvandoMaterial} style={{ minWidth: 150 }}>
-                      {salvandoMaterial ? 'Enviando...' : 'Anexar'}
-                    </button>
+                    <form onSubmit={handleUploadMaterial} style={{ display: 'grid', gap: 12 }}>
+                      <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 0.9fr 1fr', gap: 12 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Título</label>
+                          <input className="input-field" value={tituloMaterial} onChange={e => setTituloMaterial(e.target.value)} placeholder="Ex.: Protocolo de atendimento" />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Resumo</label>
+                          <input className="input-field" value={descricaoMaterial} onChange={e => setDescricaoMaterial(e.target.value)} placeholder="Descrição breve para as profissionais" />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Categoria</label>
+                          <select className="input-field" value={categoriaMaterial} onChange={e => { setCategoriaMaterial(e.target.value); setArquivoMaterial(null); setLinkUrl('') }}>
+                            {CATEGORIAS_MATERIAIS.map(categoria => (
+                              <option key={categoria} value={categoria} style={{ background: '#1a0a2e' }}>{categoria}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Para profissional</label>
+                          <select className="input-field" value={profileIdMaterial} onChange={e => setProfileIdMaterial(e.target.value)}>
+                            <option value="" style={{ background: '#1a0a2e' }}>Todas as profissionais</option>
+                            {profiles.map(prof => (
+                              <option key={prof.id} value={prof.id} style={{ background: '#1a0a2e' }}>{prof.primeiro_nome}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'end' }}>
+                        {categoriaMaterial === CATEGORIA_LINK ? (
+                          <div>
+                            <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>URL do link</label>
+                            <input
+                              type="url"
+                              className="input-field"
+                              value={linkUrl}
+                              onChange={e => setLinkUrl(e.target.value)}
+                              placeholder="https://..."
+                            />
+                          </div>
+                        ) : (
+                          <div>
+                            <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 6 }}>Arquivo</label>
+                            <input
+                              type="file"
+                              className="input-field"
+                              onChange={e => setArquivoMaterial(e.target.files?.[0] ?? null)}
+                              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.txt,.csv,.mp4,.mov,.zip"
+                            />
+                          </div>
+                        )}
+                        <button type="submit" className="btn-primary" disabled={salvandoMaterial} style={{ minWidth: 150 }}>
+                          {salvandoMaterial ? 'Enviando...' : categoriaMaterial === CATEGORIA_LINK ? 'Publicar link' : 'Anexar'}
+                        </button>
+                      </div>
                     </form>
 
                     {erroMaterial && (
@@ -1344,26 +1462,46 @@ export default function AdminPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                        {['Material','Categoria','Arquivo','Tamanho','Leituras','Status','Ações'].map(h => (
+                        {['Material','Categoria','Para','Arquivo / URL','Tamanho','Ciência','Status','Ações'].map(h => (
                           <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {materiais.map(material => (
+                      {materiais.map(material => {
+                        const profAlvo = material.profile_id ? profiles.find(p => p.id === material.profile_id) : null
+                        const denominador = material.profile_id ? 1 : profiles.length
+                        return (
                         <tr key={material.id} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                          <td style={{ padding: 16, minWidth: 260 }}>
+                          <td style={{ padding: 16, minWidth: 220 }}>
                             <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
                             {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
                           </td>
                           <td style={{ padding: 16 }}><span className="material-category-badge">{categoriaDoMaterial(material)}</span></td>
-                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{material.file_name}</td>
-                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.5)', whiteSpace: 'nowrap' }}>{formatFileSize(material.file_size)}</td>
-                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>{exigeCienciaMaterial(material) ? `${totalLeiturasMaterial(material.id)}/${profiles.length} cientes` : 'Não exige ciência'}</td>
+                          <td style={{ padding: 16, fontSize: 13, whiteSpace: 'nowrap' }}>
+                            {profAlvo ? (
+                              <span style={{ color: '#f472b6', fontWeight: 700 }}>{profAlvo.primeiro_nome}</span>
+                            ) : (
+                              <span style={{ color: 'rgba(240,230,255,0.45)' }}>Todas</span>
+                            )}
+                          </td>
+                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {isLinkMaterial(material) ? (
+                              <a href={material.link_url ?? '#'} target="_blank" rel="noreferrer" style={{ color: '#7dd3fc', textDecoration: 'underline' }}>
+                                {material.link_url}
+                              </a>
+                            ) : material.file_name}
+                          </td>
+                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.5)', whiteSpace: 'nowrap' }}>
+                            {isLinkMaterial(material) ? '—' : formatFileSize(material.file_size)}
+                          </td>
+                          <td style={{ padding: 16, fontSize: 13, color: 'rgba(240,230,255,0.65)', whiteSpace: 'nowrap' }}>
+                            {exigeCienciaMaterial(material) ? `${totalLeiturasMaterial(material)}/${denominador} cientes` : 'Não exige'}
+                          </td>
                           <td style={{ padding: 16 }}><span className={material.ativo ? 'badge-acima' : 'badge-abaixo'}>{material.ativo ? 'Visível' : 'Oculto'}</span></td>
                           <td style={{ padding: 16, whiteSpace: 'nowrap' }}>
                             <button type="button" onClick={() => handleAbrirMaterial(material)} style={{ background: 'rgba(56,189,248,0.12)', border: '1px solid rgba(56,189,248,0.24)', color: '#7dd3fc', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginRight: 8 }}>
-                              Abrir
+                              {isLinkMaterial(material) ? 'Abrir link' : 'Abrir'}
                             </button>
                             {podeEditar && (
                               <button type="button" onClick={() => handleRemoverMaterial(material)} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.22)', color: '#f87171', borderRadius: 10, padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
@@ -1372,10 +1510,11 @@ export default function AdminPage() {
                             )}
                           </td>
                         </tr>
-                      ))}
+                        )
+                      })}
                       {materiais.length === 0 && (
                         <tr>
-                          <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: 'rgba(240,230,255,0.35)', fontSize: 14 }}>
+                          <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'rgba(240,230,255,0.35)', fontSize: 14 }}>
                             Nenhum material anexado ainda.
                           </td>
                         </tr>

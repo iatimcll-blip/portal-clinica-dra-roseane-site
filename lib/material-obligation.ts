@@ -7,6 +7,8 @@ const CATEGORIAS_COM_CIENCIA = new Set([
   'treinamentos',
   'protocolo',
   'protocolos',
+  'link',
+  'links',
 ])
 
 function normalizarCategoria(valor?: string | null) {

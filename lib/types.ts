@@ -66,6 +66,8 @@ export type MaterialInformativo = {
   file_size: number | null
   ativo: boolean
   created_at: string
+  profile_id?: string | null
+  link_url?: string | null
 }
 
 export type MaterialLeitura = {

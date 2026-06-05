@@ -167,6 +167,7 @@ export default function PainelProfissional() {
   const [desempenhoGeral, setDesempenhoGeral] = useState(0)
   const [statusAutoavaliacao, setStatusAutoavaliacao] = useState('')
   const [enviandoAutoavaliacao, setEnviandoAutoavaliacao] = useState(false)
+  const [linksAbertos, setLinksAbertos] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async (mes: string, uid: string, currentProfile: Profile) => {
@@ -274,7 +275,8 @@ export default function PainelProfissional() {
       if (materiaisError) materiaisCarregados = []
     }
 
-    setMateriais(materiaisCarregados)
+    const materiaisDaProfissional = materiaisCarregados.filter(material => !material.profile_id || material.profile_id === uid)
+    setMateriais(materiaisDaProfissional)
     const leiturasDoBanco = ((leiturasData ?? []) as MaterialLeitura[]).reduce<Record<number, string>>((acc, leitura) => {
       acc[leitura.material_id] = leitura.read_at
       return acc
@@ -284,7 +286,7 @@ export default function PainelProfissional() {
     try {
       const leiturasGoogle = await buscarLeiturasMateriaisGoogleSheets()
       if (leiturasGoogle.length > 0) {
-        const resumo = compatibilizarLeiturasGoogleSheets([currentProfile], materiaisCarregados, leiturasGoogle)
+        const resumo = compatibilizarLeiturasGoogleSheets([currentProfile], materiaisDaProfissional, leiturasGoogle)
         const leiturasDoSheets = resumo.leituras.reduce<Record<number, string>>((acc, leitura) => {
           if (leitura.profile_id === uid) {
             acc[leitura.material_id] = leitura.read_at
@@ -454,6 +456,10 @@ export default function PainelProfissional() {
 
   function isPdfMaterial(material: MaterialInformativo) {
     return material.file_type === 'application/pdf' || material.file_name.toLowerCase().endsWith('.pdf')
+  }
+
+  function isLinkMaterial(material: MaterialInformativo) {
+    return (material.categoria ?? '').toLowerCase() === 'links' || (material.categoria ?? '').toLowerCase() === 'link'
   }
 
   function fotoProfissional() {
@@ -779,8 +785,10 @@ export default function PainelProfissional() {
     || folhaPontoProfissional?.material_id === material.id
     || Boolean(erroFolhaPontoD1),
   )
-  const materiaisPdf = materiaisIndividuais.filter(material => isPdfMaterial(material) && exigeCienciaMaterial(material))
-  const materiaisPendentesCiencia = materiaisPdf.filter(material => !leiturasMateriais[material.id])
+  const materiaisComCiencia = materiaisIndividuais.filter(material =>
+    (isPdfMaterial(material) || isLinkMaterial(material)) && exigeCienciaMaterial(material),
+  )
+  const materiaisPendentesCiencia = materiaisComCiencia.filter(material => !leiturasMateriais[material.id])
   const precisaLiberarMateriais = materiaisPendentesCiencia.length > 0
   const materiaisAgrupados = materiaisIndividuais.reduce<Record<string, MaterialInformativo[]>>((acc, material) => {
     const categoria = categoriaDoMaterial(material)
@@ -936,7 +944,7 @@ export default function PainelProfissional() {
               )}
               {precisaLiberarMateriais && (
                 <>
-                  {' '}Leia todos os materiais informativos pendentes até a última página e clique em <strong>Li e estou ciente</strong>.
+                  {' '}Acesse e conclua todos os materiais e links informativos pendentes e clique em <strong>Li e estou ciente</strong>.
                 </>
               )}
             </p>
@@ -945,7 +953,7 @@ export default function PainelProfissional() {
                 <div>Autoavaliação pendente: {autoavaliacaoConfig?.periodo}</div>
               )}
               {precisaLiberarMateriais && (
-                <div>Materiais pendentes: {materiaisPendentesCiencia.length} de {materiaisPdf.length}</div>
+                <div>Materiais/links pendentes: {materiaisPendentesCiencia.length} de {materiaisComCiencia.length}</div>
               )}
             </div>
             {precisaResponderAutoavaliacao && (
@@ -1245,7 +1253,8 @@ export default function PainelProfissional() {
                   const folhaSemCorrespondencia = isFolhaPontoD1(material) && !folhaPontoProfissional
                   const materialAberto = visualizadorPdf?.materialId === material.id
                   const chegouAoFinal = Boolean(materialAberto && totalPaginasPdf > 0 && visualizadorPdf && visualizadorPdf.pagina >= totalPaginasPdf)
-                  const podeConfirmarCiencia = Boolean(lidoEm) || chegouAoFinal
+                  const linkAberto = isLinkMaterial(material) && linksAbertos.has(material.id)
+                  const podeConfirmarCiencia = Boolean(lidoEm) || chegouAoFinal || linkAberto
                   return (
                     <div key={material.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 220, flex: '1 1 260px' }}>
@@ -1254,27 +1263,55 @@ export default function PainelProfissional() {
                           {dispensaCiencia ? <span className="material-read-badge">Consulta</span> : lidoEm && <span className="material-read-badge">Ciente</span>}
                         </div>
                         {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
-                        <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
+                        {!isLinkMaterial(material) && (
+                          <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.35)', marginTop: 6 }}>{material.file_name} · {formatFileSize(material.file_size)}</div>
+                        )}
                       </div>
                       <div className="material-actions">
-                        <button
-                          type="button"
-                          onClick={() => carregarVisualizacaoPdf(material)}
-                          disabled={!isPdfMaterial(material) || carregandoPdf || folhaSemCorrespondencia}
-                          style={{
-                            background: visualizadorPdf?.materialId === material.id ? 'rgba(74,222,128,0.16)' : 'linear-gradient(135deg,#be185d,#7c3aed)',
-                            border: visualizadorPdf?.materialId === material.id ? '1px solid rgba(74,222,128,0.28)' : 0,
-                            color: visualizadorPdf?.materialId === material.id ? '#86efac' : 'white',
-                            borderRadius: 10,
-                            padding: '10px 14px',
-                            fontSize: 12,
-                            fontWeight: 700,
-                            cursor: isPdfMaterial(material) && !folhaSemCorrespondencia ? 'pointer' : 'not-allowed',
-                            opacity: isPdfMaterial(material) && !folhaSemCorrespondencia ? 1 : 0.55,
-                          }}
-                        >
-                          {folhaSemCorrespondencia ? 'Aguardando compatibilização' : isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
-                        </button>
+                        {isLinkMaterial(material) ? (
+                          material.link_url ? (
+                            <a
+                              href={material.link_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={() => setLinksAbertos(prev => new Set([...prev, material.id]))}
+                              style={{
+                                display: 'inline-block',
+                                background: linkAberto ? 'rgba(74,222,128,0.16)' : 'linear-gradient(135deg,#be185d,#7c3aed)',
+                                border: linkAberto ? '1px solid rgba(74,222,128,0.28)' : '0',
+                                color: linkAberto ? '#86efac' : 'white',
+                                borderRadius: 10,
+                                padding: '10px 14px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                textDecoration: 'none',
+                              }}
+                            >
+                              {linkAberto ? 'Link acessado' : 'Acessar link'}
+                            </a>
+                          ) : (
+                            <span style={{ fontSize: 12, color: 'rgba(240,230,255,0.35)' }}>Link não configurado</span>
+                          )
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => carregarVisualizacaoPdf(material)}
+                            disabled={!isPdfMaterial(material) || carregandoPdf || folhaSemCorrespondencia}
+                            style={{
+                              background: visualizadorPdf?.materialId === material.id ? 'rgba(74,222,128,0.16)' : 'linear-gradient(135deg,#be185d,#7c3aed)',
+                              border: visualizadorPdf?.materialId === material.id ? '1px solid rgba(74,222,128,0.28)' : 0,
+                              color: visualizadorPdf?.materialId === material.id ? '#86efac' : 'white',
+                              borderRadius: 10,
+                              padding: '10px 14px',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: isPdfMaterial(material) && !folhaSemCorrespondencia ? 'pointer' : 'not-allowed',
+                              opacity: isPdfMaterial(material) && !folhaSemCorrespondencia ? 1 : 0.55,
+                            }}
+                          >
+                            {folhaSemCorrespondencia ? 'Aguardando compatibilização' : isPdfMaterial(material) ? (visualizadorPdf?.materialId === material.id ? 'Aberto no painel' : 'Visualizar no painel') : 'PDF indisponível'}
+                          </button>
+                        )}
                         {dispensaCiencia ? (
                           <div className="material-read-confirmed">
                             Sem ciência obrigatória
@@ -1284,19 +1321,19 @@ export default function PainelProfissional() {
                             Termo já assinado em {new Date(lidoEm).toLocaleDateString('pt-BR')}
                           </div>
                         ) : (
-                        <button
-                          type="button"
-                          onClick={() => confirmarLeitura(material)}
-                          disabled={!podeConfirmarCiencia}
-                          className="material-read-button"
-                          title={!lidoEm && !podeConfirmarCiencia ? 'Leia o material até a última página para habilitar a ciência.' : undefined}
-                        >
-                          Li e estou ciente
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => confirmarLeitura(material)}
+                            disabled={!podeConfirmarCiencia}
+                            className="material-read-button"
+                            title={!podeConfirmarCiencia ? (isLinkMaterial(material) ? 'Acesse o link para habilitar a ciência.' : 'Leia o material até a última página para habilitar a ciência.') : undefined}
+                          >
+                            Li e estou ciente
+                          </button>
                         )}
-                        {!lidoEm && !podeConfirmarCiencia && isPdfMaterial(material) && (
+                        {!lidoEm && !podeConfirmarCiencia && (isPdfMaterial(material) || isLinkMaterial(material)) && (
                           <div style={{ flexBasis: '100%', fontSize: 11, color: 'rgba(240,230,255,0.45)' }}>
-                            O botão será liberado ao chegar na última página.
+                            {isLinkMaterial(material) ? 'O botão será liberado ao acessar o link.' : 'O botão será liberado ao chegar na última página.'}
                           </div>
                         )}
                       </div>
