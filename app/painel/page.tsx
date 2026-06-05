@@ -49,6 +49,7 @@ const PASTA_FOTOS_PROFISSIONAIS = 'fotos-profissionais'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
 const YOUTUBE_UPLOADS_PLAYLIST_ID = 'UUomJ8VZUli9JIv2Cgpzf_DQ'
 const YOUTUBE_PLAYLIST_LIMIT = 50
+const PREFIXO_DESTINOS_MATERIAL = 'targets__'
 const FOTOS_PROFISSIONAIS: Record<string, string> = {
   erica: '/erica.png',
   gilmara: '/Gilmara.png',
@@ -89,6 +90,17 @@ function salvarLeituraLocal(profileId: string, materialId: number, readAt: strin
   if (typeof window === 'undefined') return
   const leituras = carregarLeiturasLocais(profileId)
   localStorage.setItem(chaveLeiturasLocais(profileId), JSON.stringify({ ...leituras, [materialId]: readAt }))
+}
+
+function extrairDestinosDoCaminho(filePath?: string | null) {
+  if (!filePath?.startsWith(PREFIXO_DESTINOS_MATERIAL)) return []
+  const fim = filePath.indexOf('__', PREFIXO_DESTINOS_MATERIAL.length)
+  if (fim < 0) return []
+  return filePath
+    .slice(PREFIXO_DESTINOS_MATERIAL.length, fim)
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean)
 }
 
 function hojeISO() {
@@ -468,6 +480,10 @@ export default function PainelProfissional() {
   }
 
   function materialLiberadoParaProfile(material: MaterialInformativo, uid: string) {
+    const destinosNoCaminho = extrairDestinosDoCaminho(material.file_path)
+    if (destinosNoCaminho.length > 0) {
+      return destinosNoCaminho.includes(uid)
+    }
     if (Array.isArray(material.target_profile_ids) && material.target_profile_ids.length > 0) {
       return material.target_profile_ids.includes(uid)
     }

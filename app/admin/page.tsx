@@ -52,6 +52,7 @@ const YOUTUBE_PLAYLIST_LIMIT = 50
 const LIMITE_MATERIAL_BYTES = 50 * 1024 * 1024
 const EXTENSOES_MATERIAIS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'csv', 'mp4', 'mov', 'zip']
 const CATEGORIAS_MATERIAIS = ['Comunicados', 'Treinamentos', 'Metas', 'Protocolos', CATEGORIA_FOLHA_PONTO_D1, CATEGORIA_LINK]
+const PREFIXO_DESTINOS_MATERIAL = 'targets__'
 
 function chaveLeiturasLocais(profileId: string) {
   return `leituras_materiais_${profileId}`
@@ -70,6 +71,22 @@ function salvarLeituraLocal(profileId: string, materialId: number, readAt: strin
   if (typeof window === 'undefined') return
   const leituras = carregarLeiturasLocais(profileId)
   localStorage.setItem(chaveLeiturasLocais(profileId), JSON.stringify({ ...leituras, [materialId]: leituras[materialId] ?? readAt }))
+}
+
+function anexarDestinosAoCaminho(filePath: string, targetProfileIds: string[] | null) {
+  if (!targetProfileIds || targetProfileIds.length === 0) return filePath
+  return `${PREFIXO_DESTINOS_MATERIAL}${targetProfileIds.join(',')}__${filePath}`
+}
+
+function extrairDestinosDoCaminho(filePath?: string | null) {
+  if (!filePath?.startsWith(PREFIXO_DESTINOS_MATERIAL)) return []
+  const fim = filePath.indexOf('__', PREFIXO_DESTINOS_MATERIAL.length)
+  if (fim < 0) return []
+  return filePath
+    .slice(PREFIXO_DESTINOS_MATERIAL.length, fim)
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean)
 }
 
 export default function AdminPage() {
@@ -424,7 +441,6 @@ export default function AdminPage() {
     const idsSelecionados = materialParaTodas ? [] : profileIdsMaterial.filter(id => idsProfissionais.has(id))
     return {
       targetProfileIds: idsSelecionados.length > 0 ? idsSelecionados : null,
-      profileIdCompat: idsSelecionados.length === 1 ? idsSelecionados[0] : null,
       label: idsSelecionados.length > 0
         ? `${idsSelecionados.length} profissional${idsSelecionados.length > 1 ? 'es' : ''} selecionada${idsSelecionados.length > 1 ? 's' : ''}`
         : 'todas as profissionais',
@@ -468,9 +484,9 @@ export default function AdminPage() {
       setSalvandoMaterial(true)
       const supabase = createClient()
       const titulo = tituloMaterial.trim() || 'Link informativo'
-      const filePath = `link__${Date.now()}__${crypto.randomUUID()}`
+      const filePath = anexarDestinosAoCaminho(`link__${Date.now()}__${crypto.randomUUID()}`, destinoMaterial.targetProfileIds)
 
-      const payloadLinkBase = {
+      const payloadLink = {
         titulo,
         descricao: descricaoMaterial.trim() || null,
         categoria: CATEGORIA_LINK,
@@ -480,18 +496,11 @@ export default function AdminPage() {
         file_size: null,
         ativo: true,
       }
-      const payloadLink = destinoMaterial.targetProfileIds
-        ? {
-          ...payloadLinkBase,
-          profile_id: destinoMaterial.profileIdCompat,
-          ...(destinoMaterial.targetProfileIds.length > 1 ? { target_profile_ids: destinoMaterial.targetProfileIds } : {}),
-        }
-        : payloadLinkBase
 
       let { error: insertError } = await supabase.from('materiais_informativos').insert(payloadLink)
 
       if (insertError && erroColunasDestinoMaterial(insertError.message, insertError.code) && !destinoMaterial.targetProfileIds) {
-        ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadLinkBase))
+        ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadLink))
       }
 
       if (insertError) {
@@ -525,7 +534,10 @@ export default function AdminPage() {
     setSalvandoMaterial(true)
     const supabase = createClient()
     const titulo = tituloMaterial.trim() || arquivoMaterial.name
-    const filePath = criarCaminhoMaterialStorage(arquivoMaterial, categoriaMaterial, titulo)
+    const filePath = anexarDestinosAoCaminho(
+      criarCaminhoMaterialStorage(arquivoMaterial, categoriaMaterial, titulo),
+      destinoMaterial.targetProfileIds,
+    )
     const substituirFolhaPonto = categoriaMaterial === CATEGORIA_FOLHA_PONTO_D1
     const materiaisFolhaPontoAnteriores = substituirFolhaPonto
       ? materiais.filter(material => isFolhaPontoD1(material))
@@ -555,7 +567,7 @@ export default function AdminPage() {
         .in('id', materiaisFolhaPontoAnteriores.map(material => material.id))
     }
 
-    const payloadMaterialBase = {
+    const payloadMaterial = {
       titulo,
       descricao: descricaoMaterial.trim() || null,
       categoria: categoriaMaterial,
@@ -565,18 +577,11 @@ export default function AdminPage() {
       file_size: arquivoMaterial.size,
       ativo: true,
     }
-    const payloadMaterial = destinoMaterial.targetProfileIds
-      ? {
-        ...payloadMaterialBase,
-        profile_id: destinoMaterial.profileIdCompat,
-        ...(destinoMaterial.targetProfileIds.length > 1 ? { target_profile_ids: destinoMaterial.targetProfileIds } : {}),
-      }
-      : payloadMaterialBase
 
     let { error: insertError } = await supabase.from('materiais_informativos').insert(payloadMaterial)
 
     if (insertError && erroColunasDestinoMaterial(insertError.message, insertError.code) && !destinoMaterial.targetProfileIds) {
-      ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadMaterialBase))
+      ;({ error: insertError } = await supabase.from('materiais_informativos').insert(payloadMaterial))
     }
 
     if (insertError) {
@@ -827,11 +832,13 @@ export default function AdminPage() {
   const pertoDaMeta = rankingMensal.filter(p => p.pctMeta >= 80 && p.pctMeta < 100).length
   const idsProfissionais = new Set(profiles.map(profile => profile.id))
   const idsProfissionaisAlvoMaterial = (material: MaterialInformativo) => (
-    Array.isArray(material.target_profile_ids) && material.target_profile_ids.length > 0
-      ? new Set(material.target_profile_ids.filter(id => idsProfissionais.has(id)))
-      : material.profile_id && idsProfissionais.has(material.profile_id)
-        ? new Set([material.profile_id])
-        : idsProfissionais
+    extrairDestinosDoCaminho(material.file_path).length > 0
+      ? new Set(extrairDestinosDoCaminho(material.file_path).filter(id => idsProfissionais.has(id)))
+      : Array.isArray(material.target_profile_ids) && material.target_profile_ids.length > 0
+        ? new Set(material.target_profile_ids.filter(id => idsProfissionais.has(id)))
+        : material.profile_id && idsProfissionais.has(material.profile_id)
+          ? new Set([material.profile_id])
+          : idsProfissionais
   )
   const materiaisObrigatorios = materiais.filter(material =>
     material.ativo
@@ -921,7 +928,8 @@ export default function AdminPage() {
   function labelDestinoMaterial(material: MaterialInformativo) {
     const alvos = profissionaisAlvoMaterial(material)
     const temSelecaoExplicita = Boolean(
-      (Array.isArray(material.target_profile_ids) && material.target_profile_ids.length > 0)
+      extrairDestinosDoCaminho(material.file_path).length > 0
+      || (Array.isArray(material.target_profile_ids) && material.target_profile_ids.length > 0)
       || material.profile_id,
     )
     if (!temSelecaoExplicita) return 'Todas'
