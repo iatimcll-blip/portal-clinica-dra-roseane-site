@@ -249,9 +249,6 @@ export default function AdminPage() {
     ])
 
     const leiturasBanco = leiturasResult.status === 'fulfilled' ? ((leiturasResult.value.data ?? []) as MaterialLeitura[]) : []
-    if (leiturasResult.status === 'fulfilled' && leiturasResult.value.error) {
-      setErroMaterial(mensagemErroLeituras(leiturasResult.value.error.message, leiturasResult.value.error.code))
-    }
     const leiturasLocais = Object.entries(carregarLeiturasLocais(user.id)).map(([materialId, readAt]) => ({
       material_id: Number(materialId),
       profile_id: user.id,
@@ -279,9 +276,6 @@ export default function AdminPage() {
       .then(linhasGoogle => {
         const resumoGoogle = compatibilizarLeiturasGoogleSheets(profs ?? [], materiaisCarregados, linhasGoogle)
         setResumoLeiturasGoogle(resumoGoogle)
-        setErroMaterial(erroAtual =>
-          erroAtual.includes('contagem de aceites') ? '' : erroAtual,
-        )
         setLeiturasMateriais(prev => {
           const leiturasAtualizadas = new Map<string, MaterialLeitura>()
           ;[...prev, ...resumoGoogle.leituras].forEach(leitura => {
@@ -417,16 +411,6 @@ export default function AdminPage() {
       || texto.includes('link_url')
       || texto.includes('profile_id')
       || texto.includes('target_profile_ids')
-  }
-
-  function mensagemErroLeituras(message?: string, code?: string) {
-    if (code === 'PGRST205' || message?.toLowerCase().includes('materiais_leituras')) {
-      return 'A contagem de aceites ainda nao esta ativa no Supabase. Execute o arquivo supabase/fix_materiais_leituras_persistencia.sql no SQL Editor.'
-    }
-    if (message?.toLowerCase().includes('row-level security')) {
-      return 'O Supabase bloqueou a leitura dos aceites pelas regras de acesso. Reaplique o arquivo supabase/fix_materiais_leituras_persistencia.sql no SQL Editor.'
-    }
-    return 'Nao foi possivel carregar a contagem de aceites agora.'
   }
 
   function validarArquivoMaterial(arquivo: File) {
