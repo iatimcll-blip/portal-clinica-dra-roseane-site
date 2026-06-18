@@ -947,9 +947,15 @@ export default function AdminPage() {
     acc[pergunta.grupo] = [...(acc[pergunta.grupo] ?? []), pergunta]
     return acc
   }, {})
+  const folhasDoMesSelecionado = folhasPontoD1.filter(folha => {
+    if (!folha.periodo) return true
+    const matchMes = folha.periodo.match(/\d{2}\/(\d{2})\/\d{4}/)
+    const mesFolha = matchMes ? Number(matchMes[1]) : null
+    return mesFolha === null || mesFolha === mesNum
+  })
   const folhasPontoPorProfissional = profiles.map(profile => ({
     profile,
-    folha: encontrarFolhaDoProfissional(folhasPontoD1, profile),
+    folha: encontrarFolhaDoProfissional(folhasDoMesSelecionado, profile),
   }))
   const folhasPontoIdentificadas = folhasPontoPorProfissional.filter(item => item.folha).length
   const podeEditar = perfilAdmin === 'admin'
@@ -1608,7 +1614,7 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {(folhasPontoD1.length > 0 || erroFolhaPontoD1) && (
+                {(folhasDoMesSelecionado.length > 0 || erroFolhaPontoD1) && (
                   <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                     <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Folha de Ponto D-1 por profissional</h3>
                     <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 14 }}>
