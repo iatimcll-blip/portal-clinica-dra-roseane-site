@@ -597,17 +597,6 @@ export default function AdminPage() {
       return
     }
 
-    if (materiaisFolhaPontoAnteriores.length > 0) {
-      await supabase.storage
-        .from(BUCKET_MATERIAIS)
-        .remove(materiaisFolhaPontoAnteriores.map(material => material.file_path))
-
-      await supabase
-        .from('materiais_informativos')
-        .delete()
-        .in('id', materiaisFolhaPontoAnteriores.map(material => material.id))
-    }
-
     const payloadMaterialBase = {
       titulo,
       descricao: descricaoMaterial.trim() || null,
@@ -632,12 +621,19 @@ export default function AdminPage() {
 
     if (insertError) {
       if (destinoMaterial.targetProfileIds) {
+        // Falha com profissionais específicas: remove apenas o arquivo novo (antigos preservados).
         await supabase.storage.from(BUCKET_MATERIAIS).remove([filePath])
         setErroMaterial(mensagemErroMateriais(insertError.message, insertError.code))
         setSalvandoMaterial(false)
         return
       }
 
+      // Fallback de storage para todas as profissionais: remove antigos do storage antes de listar.
+      if (substituirFolhaPonto && materiaisFolhaPontoAnteriores.length > 0) {
+        await supabase.storage
+          .from(BUCKET_MATERIAIS)
+          .remove(materiaisFolhaPontoAnteriores.map(material => material.file_path))
+      }
       const materiaisStorage = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
       setMateriais(substituirFolhaPonto
         ? materiaisStorage.filter(material => !isFolhaPontoD1(material) || material.file_path === filePath)
@@ -651,6 +647,18 @@ export default function AdminPage() {
       setErroMaterial('')
       setSalvandoMaterial(false)
       return
+    }
+
+    // Insert bem-sucedido: agora remove os materiais antigos de Folha de Ponto.
+    if (materiaisFolhaPontoAnteriores.length > 0) {
+      await supabase.storage
+        .from(BUCKET_MATERIAIS)
+        .remove(materiaisFolhaPontoAnteriores.map(material => material.file_path))
+
+      await supabase
+        .from('materiais_informativos')
+        .delete()
+        .in('id', materiaisFolhaPontoAnteriores.map(material => material.id))
     }
 
     setTituloMaterial('')
