@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import Papa from 'papaparse'
 import DecoracaoDireita from '@/components/DecoracaoDireita'
 import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import { createClient } from '@/lib/supabase/client'
@@ -12,7 +13,7 @@ import {
   MESES_LISTA, mesNumero, formatBRL, calcBonus, calcStatus, calcPctMeta,
   calcComissaoAvaliacoes, getStatusClass,
 } from '@/lib/formulas'
-import type { Profile, ConfiguracoesMes, Role } from '@/lib/types'
+import type { Profile, ConfiguracoesMes, Role, Venda } from '@/lib/types'
 import {
   DEMO_MODE,
   adicionarDemoProfissional,
@@ -24,6 +25,7 @@ import {
   salvarDemoMes,
 } from '@/lib/demo-data'
 import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
+import { normalizarNomePonto } from '@/lib/ponto-d1'
 
 const ANO = 2025
 
@@ -47,6 +49,47 @@ async function mensagemErroFuncao(erro: unknown, mensagemPadrao: string): Promis
   return mensagemPadrao
 }
 
+function parseValorBRL(valor?: string | null): number {
+  if (!valor) return 0
+  const numero = Number(valor.trim().replace(/\./g, '').replace(',', '.'))
+  return Number.isFinite(numero) ? numero : 0
+}
+
+function parseDataBR(valor?: string | null): { iso: string; mes: number; ano: number } | null {
+  const match = valor?.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (!match) return null
+  const [, dia, mes, ano] = match
+  return { iso: `${ano}-${mes}-${dia}`, mes: Number(mes), ano: Number(ano) }
+}
+
+async function lerVendasDoCsv(arquivo: File): Promise<Record<string, string>[]> {
+  const buffer = await arquivo.arrayBuffer()
+  const texto = new TextDecoder('windows-1252').decode(buffer)
+  const linhas = texto.split(/\r?\n/)
+  const indiceCabecalho = linhas.findIndex(linha => linha.includes('Atendimento/Venda') && linha.includes('Profissional'))
+
+  if (indiceCabecalho < 0) {
+    throw new Error('Não foi possível encontrar o cabeçalho esperado no arquivo (colunas "Atendimento/Venda" e "Profissional"). Confira se é o Relatório de Comissões exportado do Trinks.')
+  }
+
+  const textoUtil = linhas.slice(indiceCabecalho).join('\n')
+  const resultado = Papa.parse<Record<string, string>>(textoUtil, { header: true, delimiter: ';', skipEmptyLines: true })
+  return resultado.data
+}
+
+function encontrarProfilePorNomeVenda(nomeCsv: string, profiles: Profile[]): Profile | null {
+  const normalizado = normalizarNomePonto(nomeCsv)
+  if (!normalizado) return null
+
+  return profiles.find(p => normalizarNomePonto(p.nome) === normalizado)
+    ?? profiles.find(p => {
+      const nomeProfile = normalizarNomePonto(p.nome)
+      return nomeProfile.includes(normalizado) || normalizado.includes(nomeProfile)
+    })
+    ?? profiles.find(p => normalizarNomePonto(p.primeiro_nome) === normalizado)
+    ?? null
+}
+
 export default function EditarPage() {
   const router = useRouter()
   const [mesSelecionado, setMesSelecionado] = useState('Janeiro')
@@ -57,6 +100,7 @@ export default function EditarPage() {
   const [saving, setSaving] = useState(false)
   const [salvo, setSalvo] = useState(false)
   const [sincronizando, setSincronizando] = useState(false)
+  const [importandoVendas, setImportandoVendas] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
   const [novoNome, setNovoNome] = useState('')
   const [novoPrimeiroNome, setNovoPrimeiroNome] = useState('')
@@ -226,6 +270,99 @@ export default function EditarPage() {
       setErroSalvar(error instanceof Error ? error.message : 'Não foi possível sincronizar com o Trinks.')
     } finally {
       setSincronizando(false)
+    }
+  }
+
+  async function handleImportarVendasCsv(event: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = event.target.files?.[0]
+    event.target.value = ''
+    if (!arquivo) return
+
+    setErroSalvar('')
+    setMensagemAdicionar('')
+
+    if (DEMO_MODE) {
+      setErroSalvar('Importação de vendas indisponível no modo demonstração.')
+      return
+    }
+
+    setImportandoVendas(true)
+
+    try {
+      const linhas = await lerVendasDoCsv(arquivo)
+      const naoEncontrados = new Set<string>()
+      const vendasValidas: Omit<Venda, 'id'>[] = []
+
+      for (const linha of linhas) {
+        const dataInfo = parseDataBR(linha['Atendimento/Venda'])
+        if (!dataInfo) continue
+
+        const nomeProfissional = linha['Profissional']?.trim()
+        if (!nomeProfissional) continue
+
+        const profile = encontrarProfilePorNomeVenda(nomeProfissional, profiles)
+        if (!profile) {
+          naoEncontrados.add(nomeProfissional)
+          continue
+        }
+
+        vendasValidas.push({
+          profile_id: profile.id,
+          mes: dataInfo.mes,
+          ano: dataInfo.ano,
+          data_venda: dataInfo.iso,
+          cliente_nome: linha['Cliente']?.trim() || null,
+          servico: linha['Serviço/Produto/Pacote']?.trim() || null,
+          categoria: linha['Categoria']?.trim() || null,
+          valor: parseValorBRL(linha['Valor']),
+          valor_comissao: linha['Valor Comissão'] ? parseValorBRL(linha['Valor Comissão']) : null,
+        })
+      }
+
+      if (vendasValidas.length === 0) {
+        setErroSalvar('Nenhuma venda válida encontrada no arquivo. Confira se é o Relatório de Comissões exportado do Trinks.')
+        return
+      }
+
+      const supabase = createClient()
+
+      const grupos = new Map<string, { profile_id: string; mes: number; ano: number; vendas: Omit<Venda, 'id'>[] }>()
+      for (const venda of vendasValidas) {
+        const chave = `${venda.profile_id}-${venda.mes}-${venda.ano}`
+        if (!grupos.has(chave)) grupos.set(chave, { profile_id: venda.profile_id, mes: venda.mes, ano: venda.ano, vendas: [] })
+        grupos.get(chave)!.vendas.push(venda)
+      }
+
+      let totalImportado = 0
+      let valorTotal = 0
+
+      for (const grupo of grupos.values()) {
+        const { error: deleteError } = await supabase
+          .from('vendas')
+          .delete()
+          .eq('profile_id', grupo.profile_id)
+          .eq('mes', grupo.mes)
+          .eq('ano', grupo.ano)
+
+        if (deleteError) throw deleteError
+
+        const { error: insertError } = await supabase.from('vendas').insert(grupo.vendas)
+        if (insertError) throw insertError
+
+        totalImportado += grupo.vendas.length
+        valorTotal += grupo.vendas.reduce((s, v) => s + v.valor, 0)
+      }
+
+      const avisos = naoEncontrados.size > 0
+        ? ` Profissionais do arquivo sem correspondência no painel (vendas ignoradas): ${Array.from(naoEncontrados).join(', ')}.`
+        : ''
+
+      setMensagemAdicionar(`${totalImportado} venda(s) importada(s), totalizando ${formatBRL(valorTotal)}.${avisos}`)
+    } catch (error) {
+      console.error('Erro ao importar vendas', error)
+      setErroSalvar(error instanceof Error ? error.message : 'Não foi possível importar o arquivo de vendas.')
+    } finally {
+      setImportandoVendas(false)
     }
   }
 
@@ -572,6 +709,23 @@ export default function EditarPage() {
           <div style={{ textAlign: 'center', padding: 60, color: 'rgba(240,230,255,0.4)' }}>Carregando...</div>
         ) : (
           <>
+            <div className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>📥 Importar vendas (CSV Trinks)</h3>
+              <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
+                Suba o Relatório de Comissões exportado do Trinks (Financeiro &gt; Pagamento de Profissionais). Cada profissional passa a ver o detalhe das próprias vendas do mês no painel dela. Reimportar o mesmo mês substitui os dados anteriores, sem duplicar.
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleImportarVendasCsv}
+                  disabled={importandoVendas}
+                  style={{ fontSize: 13, color: 'rgba(240,230,255,0.7)' }}
+                />
+                {importandoVendas && <span style={{ fontSize: 12, color: 'rgba(240,230,255,0.5)' }}>Importando...</span>}
+              </div>
+            </div>
+
             <form onSubmit={handleAdicionarProfissional} className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Adicionar profissional</h3>
               <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>

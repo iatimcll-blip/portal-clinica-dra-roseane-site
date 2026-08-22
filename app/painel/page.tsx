@@ -13,8 +13,8 @@ import {
   calcPctGatilho, calcPctMeta, getMensagem, getMensagemAnual,
   getMedalEmoji, getStatusClass,
 } from '@/lib/formulas'
-import type { Profile, ConfiguracoesMes, MaterialInformativo, MaterialLeitura } from '@/lib/types'
-import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile } from '@/lib/demo-data'
+import type { Profile, ConfiguracoesMes, MaterialInformativo, MaterialLeitura, Venda } from '@/lib/types'
+import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual, getDemoProfile, getDemoVendasMes } from '@/lib/demo-data'
 import {
   buscarAutoavaliacaoConfigGoogleSheets,
   buscarAutoavaliacaoRespostasGoogleSheets,
@@ -182,6 +182,9 @@ export default function PainelProfissional() {
   const [enviandoAutoavaliacao, setEnviandoAutoavaliacao] = useState(false)
   const [linksAbertos, setLinksAbertos] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [vendasMes, setVendasMes] = useState<Venda[]>([])
+  const [carregandoVendas, setCarregandoVendas] = useState(false)
+  const [erroVendas, setErroVendas] = useState('')
 
   const carregar = useCallback(async (mes: string, uid: string, currentProfile: Profile) => {
     if (DEMO_MODE) {
@@ -372,6 +375,41 @@ export default function PainelProfissional() {
       carregar(mesSelecionado, profileId, profile).then(() => setLoading(false))
     })
   }, [mesSelecionado, profileId, profile, carregar])
+
+  useEffect(() => {
+    if (!profileId || !profile) return
+
+    if (DEMO_MODE) {
+      setVendasMes(getDemoVendasMes(mesNumero(mesSelecionado)))
+      setErroVendas('')
+      return
+    }
+
+    let cancelado = false
+    setCarregandoVendas(true)
+    setErroVendas('')
+
+    const supabase = createClient()
+    supabase
+      .from('vendas')
+      .select('data_venda,cliente_nome,servico,valor')
+      .eq('profile_id', profileId)
+      .eq('mes', mesNumero(mesSelecionado))
+      .eq('ano', new Date().getFullYear())
+      .order('data_venda')
+      .then(({ data, error }) => {
+        if (cancelado) return
+        if (error) {
+          setVendasMes([])
+          setErroVendas('Detalhe de vendas ainda não disponível para este mês.')
+        } else {
+          setVendasMes((data ?? []) as Venda[])
+        }
+        setCarregandoVendas(false)
+      })
+
+    return () => { cancelado = true }
+  }, [mesSelecionado, profileId, profile])
 
   useEffect(() => {
     if (!profileId || !profile) return
@@ -1257,6 +1295,51 @@ export default function PainelProfissional() {
         </div>
           </>
         )}
+
+        <div className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>🧾 Minhas vendas em {mesSelecionado}</h3>
+          <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
+            Detalhe das suas vendas do mês. Visível apenas para você.
+          </p>
+
+          {carregandoVendas ? (
+            <div style={{ textAlign: 'center', padding: 24, color: 'rgba(240,230,255,0.4)', fontSize: 13 }}>Carregando...</div>
+          ) : erroVendas ? (
+            <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.45)' }}>{erroVendas}</div>
+          ) : vendasMes.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.45)' }}>Nenhuma venda registrada para este mês ainda.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                    {['Data', 'Cliente', 'Serviço', 'Valor'].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendasMes.map((venda, index) => (
+                    <tr key={index} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                      <td style={{ padding: '10px 14px', fontSize: 13 }}>{new Date(`${venda.data_venda}T00:00:00`).toLocaleDateString('pt-BR')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13 }}>{venda.cliente_nome ?? '—'}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13 }}>{venda.servico ?? '—'}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600 }}>{formatBRL(venda.valor)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                    <td colSpan={3} style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>Total</td>
+                    <td style={{ padding: '10px 14px', fontSize: 14, fontWeight: 700, color: '#c084fc' }}>
+                      {formatBRL(vendasMes.reduce((soma, venda) => soma + venda.valor, 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
 
         <div id="painel-materiais" className="glass-sm" style={{ padding: 24, marginTop: 24, marginBottom: 24 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>📎 Materiais informativos</h3>
