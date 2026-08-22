@@ -1,4 +1,5 @@
 export type Role = 'admin' | 'gestao' | 'user'
+export type Contrato = 'clt' | 'cnpj'
 
 export type Profile = {
   id: string
@@ -6,6 +7,7 @@ export type Profile = {
   primeiro_nome: string
   role: Role
   ativo: boolean
+  contrato?: Contrato
 }
 
 export type ConfiguracoesMes = {

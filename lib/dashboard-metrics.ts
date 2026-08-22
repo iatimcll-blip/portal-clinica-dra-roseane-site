@@ -21,6 +21,28 @@ export function resultadoDoMes(resultados: Resultado[], profileId: string, mes: 
   }
 }
 
+export function mesclarResultadosComReferencia(
+  reais: Resultado[],
+  referencia: Resultado[],
+  mes: number,
+  anoAlvo: number,
+): { resultados: Resultado[]; profissionaisComReferencia: Set<string> } {
+  const profissionaisComReferencia = new Set<string>()
+  const porProfileReal = new Map(reais.filter(r => r.mes === mes).map(r => [r.profile_id, r]))
+  const extras: Resultado[] = []
+
+  for (const ref of referencia.filter(r => r.mes === mes)) {
+    const real = porProfileReal.get(ref.profile_id)
+    if (!real || real.realizado === 0) {
+      extras.push({ ...ref, ano: anoAlvo })
+      profissionaisComReferencia.add(ref.profile_id)
+    }
+  }
+
+  const semSubstituidos = reais.filter(r => !(r.mes === mes && profissionaisComReferencia.has(r.profile_id)))
+  return { resultados: [...semSubstituidos, ...extras], profissionaisComReferencia }
+}
+
 export function calcularRankingMensal(
   profiles: Profile[],
   resultados: Resultado[],
