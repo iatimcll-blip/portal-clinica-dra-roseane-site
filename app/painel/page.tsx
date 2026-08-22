@@ -44,7 +44,8 @@ import {
   type FolhaPontoD1,
 } from '@/lib/ponto-d1'
 
-const ANO = 2025
+const ANO_METAS = 2025
+const ANO_RESULTADOS = new Date().getFullYear()
 const BUCKET_MATERIAIS = 'materiais-informativos'
 const PASTA_FOTOS_PROFISSIONAIS = 'fotos-profissionais'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
@@ -185,6 +186,7 @@ export default function PainelProfissional() {
   const [vendasMes, setVendasMes] = useState<Venda[]>([])
   const [carregandoVendas, setCarregandoVendas] = useState(false)
   const [erroVendas, setErroVendas] = useState('')
+  const [usandoReferencia2025, setUsandoReferencia2025] = useState(false)
 
   const carregar = useCallback(async (mes: string, uid: string, currentProfile: Profile) => {
     if (DEMO_MODE) {
@@ -224,8 +226,8 @@ export default function PainelProfissional() {
     const mesNum = mesNumero(mes)
 
     const [{ data: cfg }, { data: painelRaw, error: painelError }, { data: materiaisData, error: materiaisError }, { data: leiturasData }] = await Promise.all([
-      supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO).single(),
-      supabase.rpc('get_professional_dashboard', { p_mes: mesNum, p_ano: ANO }).single(),
+      supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO_METAS).single(),
+      supabase.rpc('get_professional_dashboard', { p_mes: mesNum, p_ano: ANO_RESULTADOS }).single(),
       supabase.from('materiais_informativos').select('*').eq('ativo', true).order('created_at', { ascending: false }),
       supabase.from('materiais_leituras').select('material_id, profile_id, read_at').eq('profile_id', uid),
     ])
@@ -239,13 +241,13 @@ export default function PainelProfissional() {
           .select('realizado,comissao_avaliacoes,nota_feedback')
           .eq('profile_id', uid)
           .eq('mes', mesNum)
-          .eq('ano', ANO)
+          .eq('ano', ANO_RESULTADOS)
           .maybeSingle(),
         supabase
           .from('resultados')
           .select('realizado,nota_feedback')
           .eq('profile_id', uid)
-          .eq('ano', ANO),
+          .eq('ano', ANO_RESULTADOS),
       ])
 
       const ano = resultadosAno ?? []
@@ -265,6 +267,28 @@ export default function PainelProfissional() {
     } else {
       setRankingDisponivel(true)
     }
+
+    let referencia2025 = false
+    if (!painel?.realizado) {
+      const { data: resultadoReferencia } = await supabase
+        .from('resultados')
+        .select('realizado,comissao_avaliacoes,nota_feedback')
+        .eq('profile_id', uid)
+        .eq('mes', mesNum)
+        .eq('ano', ANO_METAS)
+        .maybeSingle()
+
+      if (resultadoReferencia && resultadoReferencia.realizado > 0) {
+        referencia2025 = true
+        painel = {
+          ...(painel as DashboardProfissional),
+          realizado: resultadoReferencia.realizado,
+          comissao_avaliacoes: resultadoReferencia.comissao_avaliacoes,
+          nota_feedback: resultadoReferencia.nota_feedback ?? 0,
+        }
+      }
+    }
+    setUsandoReferencia2025(referencia2025)
 
     setConfig(cfg ?? null)
     setRealizado(painel?.realizado ?? 0)
@@ -885,6 +909,92 @@ export default function PainelProfissional() {
     )
   }
 
+  if (profile.contrato === 'cnpj') {
+    const comunicados = materiaisAgrupados['Comunicados'] ?? []
+    const aReceberCnpj = realizado * 0.30
+
+    return (
+      <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
+        <aside className="app-sidebar" style={{
+          width: 220, background: 'rgba(0,0,0,0.4)', borderRight: '1px solid rgba(255,255,255,0.06)',
+          padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0,
+        }}>
+          <div className="sidebar-brand" style={{ marginBottom: 24, padding: '0 8px' }}>
+            <div style={{ marginBottom: 8 }}>
+              <Image src={assetPath('/logo.png')} alt="Roseane Débora Centro Estético" width={130} height={130}
+                style={{ objectFit: 'contain', filter: 'invert(1)', mixBlendMode: 'screen' }} />
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)' }}>Meu Painel</div>
+          </div>
+          <div className="nav-link active">📊 Meu Painel</div>
+          <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+            <div style={{ padding: '0 8px', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#f0e6ff' }}>{profile.primeiro_nome}</div>
+              <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)' }}>Profissional (CNPJ)</div>
+            </div>
+            <button onClick={handleSair} style={{ background: 'none', border: 'none', width: '100%', cursor: 'pointer', padding: 0 }}>
+              <div className="nav-link">🚪 Sair</div>
+            </button>
+          </div>
+        </aside>
+
+        <main className="app-main professional-main" style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
+          <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
+                Olá, <span className="gradient-text">{profile.primeiro_nome}! 👋</span>
+              </h1>
+              <p style={{ color: 'rgba(240,230,255,0.45)', fontSize: 14 }}>Seu resumo em {mesSelecionado}</p>
+            </div>
+            <select
+              value={mesSelecionado}
+              onChange={e => setMesSelecionado(e.target.value)}
+              className="input-field"
+              style={{ width: 'auto' }}
+            >
+              {MESES_LISTA.map(m => (
+                <option key={m} value={m} style={{ background: '#1a0a2e' }}>{m}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 24 }}>
+            <div className="glass-sm" style={{ padding: 24, textAlign: 'center' }}>
+              <div style={{ fontSize: 32, fontWeight: 800, color: '#f472b6' }}>{formatBRL(realizado)}</div>
+              <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)' }}>
+                Valor Realizado em {mesSelecionado}
+                {usandoReferencia2025 && <span style={{ marginLeft: 6, color: '#facc15' }}>≈ valor de 2025 (referência)</span>}
+              </div>
+            </div>
+            <div className="glass-sm" style={{ padding: 24, textAlign: 'center' }}>
+              <div style={{ fontSize: 32, fontWeight: 800, color: '#4ade80' }}>{formatBRL(aReceberCnpj)}</div>
+              <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)' }}>Valor a Receber (30% do realizado)</div>
+            </div>
+          </div>
+
+          <div className="glass-sm" style={{ padding: 24 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>📢 Comunicados</h3>
+            <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
+              Comunicados anexados pela administração.
+            </p>
+            {comunicados.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.4)' }}>Nenhum comunicado no momento.</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {comunicados.map(material => (
+                  <div key={material.id} style={{ padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f0e6ff' }}>{material.titulo}</div>
+                    {material.descricao && <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginTop: 4 }}>{material.descricao}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
       <aside className="app-sidebar" style={{
@@ -1096,7 +1206,10 @@ export default function PainelProfissional() {
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 32, fontWeight: 800, color: '#f472b6' }}>{formatBRL(realizado)}</div>
-            <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)' }}>Realizado em {mesSelecionado}</div>
+            <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)' }}>
+              Realizado em {mesSelecionado}
+              {usandoReferencia2025 && <span style={{ marginLeft: 6, color: '#facc15' }}>≈ valor de 2025 (referência)</span>}
+            </div>
           </div>
           <div>
             <span className={getStatusClass(status)}>{status}</span>

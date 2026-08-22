@@ -13,7 +13,7 @@ import {
   MESES_LISTA, mesNumero, formatBRL, calcBonus, calcStatus, calcPctMeta,
   calcComissaoAvaliacoes, getStatusClass,
 } from '@/lib/formulas'
-import type { Profile, ConfiguracoesMes, Role, Venda } from '@/lib/types'
+import type { Profile, ConfiguracoesMes, Role, Venda, Contrato } from '@/lib/types'
 import {
   DEMO_MODE,
   adicionarDemoProfissional,
@@ -113,6 +113,8 @@ export default function EditarPage() {
   const [editandoProfileId, setEditandoProfileId] = useState<string | null>(null)
   const [editNome, setEditNome] = useState('')
   const [editPrimeiroNome, setEditPrimeiroNome] = useState('')
+  const [editContrato, setEditContrato] = useState<Contrato>('clt')
+  const [novoContrato, setNovoContrato] = useState<Contrato>('clt')
   const [confirmandoExclusaoId, setConfirmandoExclusaoId] = useState<string | null>(null)
 
   const carregar = useCallback(async (mes: string) => {
@@ -433,6 +435,7 @@ export default function EditarPage() {
           email,
           password: senha,
           role: novoRole,
+          contrato: novoContrato,
         },
       })
 
@@ -445,6 +448,7 @@ export default function EditarPage() {
       setNovoEmail('')
       setNovaSenha('')
       setNovoRole('user')
+      setNovoContrato('clt')
       setMensagemAdicionar(novoRole === 'user'
         ? 'Profissional criada no Supabase Auth com e-mail confirmado, vinculada ao painel e liberada nas metas.'
         : 'Acesso Gestão criado no Supabase Auth com e-mail confirmado e visualização administrativa sem edição.'
@@ -463,6 +467,7 @@ export default function EditarPage() {
     setEditandoProfileId(profile.id)
     setEditNome(profile.nome)
     setEditPrimeiroNome(profile.primeiro_nome)
+    setEditContrato(profile.contrato ?? 'clt')
     setErroSalvar('')
     setMensagemAdicionar('')
   }
@@ -486,7 +491,7 @@ export default function EditarPage() {
         const supabase = createClient()
         const { error } = await supabase
           .from('profiles')
-          .update({ nome, primeiro_nome: primeiroNome, ativo: true, role: 'user' })
+          .update({ nome, primeiro_nome: primeiroNome, ativo: true, role: 'user', contrato: editContrato })
           .eq('id', profileId)
 
         if (error) throw error
@@ -751,7 +756,7 @@ export default function EditarPage() {
               <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
                 Informe nome, e-mail e senha inicial. O acesso no Supabase Auth e o UUID individual serao criados automaticamente.
               </p>
-              <div className="responsive-grid edit-config-grid" style={{ display: 'grid', gridTemplateColumns: DEMO_MODE ? '1.5fr 1fr 0.9fr auto' : '1.1fr 0.8fr 0.8fr 1.1fr 0.9fr auto', gap: 12, alignItems: 'end' }}>
+              <div className="responsive-grid edit-config-grid" style={{ display: 'grid', gridTemplateColumns: DEMO_MODE ? '1.5fr 1fr 0.9fr 0.9fr auto' : '1.1fr 0.8fr 0.8fr 0.8fr 1.1fr 0.9fr auto', gap: 12, alignItems: 'end' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
                     Nome completo
@@ -788,6 +793,19 @@ export default function EditarPage() {
                   >
                     <option value="user" style={{ background: '#1a0a2e' }}>Esteticista</option>
                     <option value="gestao" style={{ background: '#1a0a2e' }}>Gestão</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'rgba(240,230,255,0.5)', marginBottom: 8, fontWeight: 500 }}>
+                    Contrato
+                  </label>
+                  <select
+                    className="input-field"
+                    value={novoContrato}
+                    onChange={e => setNovoContrato(e.target.value as Contrato)}
+                  >
+                    <option value="clt" style={{ background: '#1a0a2e' }}>CLT</option>
+                    <option value="cnpj" style={{ background: '#1a0a2e' }}>CNPJ</option>
                   </select>
                 </div>
                 {!DEMO_MODE && (
@@ -900,6 +918,15 @@ export default function EditarPage() {
                                   onChange={e => setEditPrimeiroNome(e.target.value)}
                                   style={{ padding: '8px 10px', fontSize: 13 }}
                                 />
+                                <select
+                                  className="input-field"
+                                  value={editContrato}
+                                  onChange={e => setEditContrato(e.target.value as Contrato)}
+                                  style={{ padding: '8px 10px', fontSize: 13 }}
+                                >
+                                  <option value="clt" style={{ background: '#1a0a2e' }}>CLT</option>
+                                  <option value="cnpj" style={{ background: '#1a0a2e' }}>CNPJ</option>
+                                </select>
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                   <button type="button" className="btn-primary" onClick={() => salvarEdicaoProfissional(prof.id)} disabled={adicionando}
                                     style={{ width: 'auto', padding: '7px 10px', fontSize: 12 }}>
@@ -914,6 +941,13 @@ export default function EditarPage() {
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                                 <span style={{ whiteSpace: 'nowrap' }}>{prof.nome}</span>
+                                <span style={{
+                                  fontSize: 10, padding: '2px 6px', borderRadius: 6,
+                                  background: prof.contrato === 'cnpj' ? 'rgba(56,189,248,0.16)' : 'rgba(74,222,128,0.12)',
+                                  color: prof.contrato === 'cnpj' ? '#7dd3fc' : '#86efac',
+                                }}>
+                                  {prof.contrato === 'cnpj' ? 'CNPJ' : 'CLT'}
+                                </span>
                                 <button type="button" onClick={() => iniciarEdicaoProfissional(prof)}
                                   style={{ background: 'rgba(192,132,252,0.12)', border: '1px solid rgba(192,132,252,0.22)', color: '#e9d5ff', borderRadius: 8, padding: '6px 9px', cursor: 'pointer', fontSize: 12 }}>
                                   Editar

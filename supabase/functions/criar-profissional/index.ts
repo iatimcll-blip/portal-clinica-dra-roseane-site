@@ -14,6 +14,7 @@ type NovoAcessoPayload = {
   email?: string
   password?: string
   role?: 'user' | 'gestao'
+  contrato?: 'clt' | 'cnpj'
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -85,6 +86,7 @@ Deno.serve(async req => {
   const email = textoLimpo(payload.email).toLowerCase()
   const password = payload.password ?? ''
   const role = payload.role === 'gestao' ? 'gestao' : 'user'
+  const contrato = payload.contrato === 'cnpj' ? 'cnpj' : 'clt'
 
   if (nome.length < 3 || primeiroNome.length < 2) {
     return jsonResponse({ error: 'Informe nome completo e primeiro nome.' }, 400)
@@ -113,7 +115,7 @@ Deno.serve(async req => {
 
   try {
     const { error: profileError } = await adminClient.from('profiles').upsert(
-      { id: userId, nome, primeiro_nome: primeiroNome, role, ativo: true },
+      { id: userId, nome, primeiro_nome: primeiroNome, role, ativo: true, contrato },
       { onConflict: 'id' },
     )
 
@@ -145,5 +147,6 @@ Deno.serve(async req => {
     nome,
     primeiro_nome: primeiroNome,
     role,
+    contrato,
   })
 })

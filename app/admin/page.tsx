@@ -15,7 +15,7 @@ import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
-import { calcularRankingAnual, calcularRankingMensal, resultadoDoMes } from '@/lib/dashboard-metrics'
+import { calcularRankingAnual, calcularRankingMensal, mesclarResultadosComReferencia, resultadoDoMes } from '@/lib/dashboard-metrics'
 import {
   atualizarAutoavaliacaoConfigGoogleSheets,
   buscarAutoavaliacaoConfigGoogleSheets,
@@ -45,6 +45,9 @@ import {
 type Aba = 'mensal' | 'anual' | 'bonus' | 'materiais' | 'autoavaliacao'
 type PerfilAdmin = 'admin' | 'gestao'
 
+const ANO_METAS = 2025
+const ANO_RESULTADOS = new Date().getFullYear()
+const PERCENTUAL_RECEBER_CNPJ = 0.30
 const BUCKET_MATERIAIS = 'materiais-informativos'
 const CATEGORIA_LINK = 'Links'
 const YOUTUBE_CANAL_URL = 'https://www.youtube.com/@DraRoseaneDebora/videos'
@@ -116,6 +119,7 @@ export default function AdminPage() {
   const [config, setConfig] = useState<ConfiguracoesMes | null>(null)
   const [resultados, setResultados] = useState<Resultado[]>([])
   const [todosResultados, setTodosResultados] = useState<Resultado[]>([])
+  const [profissionaisComReferencia, setProfissionaisComReferencia] = useState<Set<string>>(new Set())
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
   const [leiturasMateriais, setLeiturasMateriais] = useState<MaterialLeitura[]>([])
   const [resumoLeiturasGoogle, setResumoLeiturasGoogle] = useState<CompatibilizacaoLeituras | null>(null)
@@ -207,13 +211,18 @@ export default function AdminPage() {
     setNomeAtual(currentProfile.nome ?? '')
     setPerfilAdmin(user.email?.toLowerCase() === 'gestao@clinica.com' ? 'gestao' : currentProfile.role)
 
-    const [{ data: profs }, { data: cfg }, { data: res }, { data: anuais }, { data: mats, error: matsError }] = await Promise.all([
+    const [{ data: profs }, { data: cfg }, { data: res }, { data: resReferencia }, { data: anuais }, { data: mats, error: matsError }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
-      supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', 2025).single(),
-      supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', 2025),
-      supabase.from('resultados').select('*').eq('ano', 2025),
+      supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO_METAS).single(),
+      supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', ANO_RESULTADOS),
+      supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', ANO_METAS),
+      supabase.from('resultados').select('*').eq('ano', ANO_RESULTADOS),
       supabase.from('materiais_informativos').select('*').order('created_at', { ascending: false }),
     ])
+
+    const { resultados: resMesclados, profissionaisComReferencia: refsDoMes } = mesclarResultadosComReferencia(
+      res ?? [], resReferencia ?? [], mesNum, ANO_RESULTADOS,
+    )
 
     let materiaisCarregados = mats ?? []
     let erroMateriaisAtual = matsError ? mensagemErroMateriais(matsError.message, matsError.code) : ''
@@ -238,7 +247,8 @@ export default function AdminPage() {
 
     setProfiles(profs ?? [])
     setConfig(cfg ?? null)
-    setResultados(res ?? [])
+    setResultados(resMesclados)
+    setProfissionaisComReferencia(refsDoMes)
     setTodosResultados(anuais ?? [])
     setMateriais(materiaisCarregados)
     setErroMaterial(erroMateriaisAtual)
@@ -867,7 +877,7 @@ export default function AdminPage() {
   const cfg = config ?? { meta_clinica: 55000, meta_gatilho: 15000, meta_max: 18000, meta_individual_anual: 187000 }
 
   function getRes(profileId: string) {
-    return resultadoDoMes(resultados, profileId, mesNum, 2025)
+    return resultadoDoMes(resultados, profileId, mesNum, ANO_RESULTADOS)
   }
 
   const totalRealizado = profiles.reduce((s, p) => s + getRes(p.id).realizado, 0)
@@ -875,8 +885,8 @@ export default function AdminPage() {
   const ticketMedio = profiles.length > 0 ? totalRealizado / profiles.length : 0
   const metaClinicaBatida = totalRealizado >= cfg.meta_clinica
 
-  const rankingMensal = calcularRankingMensal(profiles, resultados, cfg, mesNum, 2025)
-  const rankingAnual = calcularRankingAnual(profiles, todosResultados, cfg.meta_individual_anual, 2025)
+  const rankingMensal = calcularRankingMensal(profiles, resultados, cfg, mesNum, ANO_RESULTADOS)
+  const rankingAnual = calcularRankingAnual(profiles, todosResultados, cfg.meta_individual_anual, ANO_RESULTADOS)
 
   const pctClinica = calcPctMeta(totalRealizado, cfg.meta_clinica)
   const totalComissoes = rankingMensal.reduce((s, p) => s + p.comissao_avaliacoes, 0)
@@ -1383,20 +1393,41 @@ export default function AdminPage() {
                       ))}
                     </tr></thead>
                     <tbody>
-                      {rankingMensal.map((p, i) => (
+                      {rankingMensal.map((p, i) => {
+                        const ehCnpj = p.contrato === 'cnpj'
+                        return (
                         <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                           <td style={{ padding: 16, fontSize: 20 }}>{getMedalEmoji(p.pos)}</td>
-                          <td style={{ padding: 16, fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>{p.nome}</td>
-                          <td style={{ padding: 16, fontSize: 14, fontWeight: 700, color: '#f472b6', whiteSpace: 'nowrap' }}>{formatBRL(p.realizado)}</td>
-                          <td style={{ padding: 16, fontSize: 14, color: p.pctGatilho >= 100 ? '#4ade80' : '#f87171' }}>{p.pctGatilho}%</td>
-                          <td style={{ padding: 16, fontSize: 14, color: p.pctMeta >= 100 ? '#4ade80' : '#f87171' }}>{p.pctMeta}%</td>
-                          <td style={{ padding: 16 }}><span className={getStatusClass(p.status)}>{p.status}</span></td>
-                          <td style={{ padding: 16, fontSize: 14, fontWeight: 600, color: '#c084fc', whiteSpace: 'nowrap' }}>{formatBRL(p.bonus)}</td>
-                          <td style={{ padding: 16, minWidth: 120 }}>
-                            <div className="progress-track"><div className={getProgressColor(p.pctMeta)} style={{ width: `${Math.min(p.pctMeta, 100)}%` }} /></div>
+                          <td style={{ padding: 16, fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                            {p.nome}
+                            {ehCnpj && <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 6, background: 'rgba(56,189,248,0.16)', color: '#7dd3fc' }}>CNPJ</span>}
                           </td>
+                          <td style={{ padding: 16, fontSize: 14, fontWeight: 700, color: '#f472b6', whiteSpace: 'nowrap' }}>
+                            {formatBRL(p.realizado)}
+                            {profissionaisComReferencia.has(p.id) && <span style={{ marginLeft: 6, fontSize: 10, color: '#facc15' }}>≈2025</span>}
+                          </td>
+                          {ehCnpj ? (
+                            <>
+                              <td style={{ padding: 16, fontSize: 14, color: 'rgba(240,230,255,0.35)' }}>—</td>
+                              <td style={{ padding: 16, fontSize: 14, color: 'rgba(240,230,255,0.35)' }}>—</td>
+                              <td style={{ padding: 16, fontSize: 12, color: 'rgba(240,230,255,0.35)' }}>Sem meta (CNPJ)</td>
+                              <td style={{ padding: 16, fontSize: 14, fontWeight: 600, color: '#7dd3fc', whiteSpace: 'nowrap' }}>{formatBRL(p.realizado * PERCENTUAL_RECEBER_CNPJ)} <span style={{ fontSize: 10, color: 'rgba(240,230,255,0.4)' }}>(30% a receber)</span></td>
+                              <td style={{ padding: 16, minWidth: 120, color: 'rgba(240,230,255,0.3)', fontSize: 12 }}>—</td>
+                            </>
+                          ) : (
+                            <>
+                              <td style={{ padding: 16, fontSize: 14, color: p.pctGatilho >= 100 ? '#4ade80' : '#f87171' }}>{p.pctGatilho}%</td>
+                              <td style={{ padding: 16, fontSize: 14, color: p.pctMeta >= 100 ? '#4ade80' : '#f87171' }}>{p.pctMeta}%</td>
+                              <td style={{ padding: 16 }}><span className={getStatusClass(p.status)}>{p.status}</span></td>
+                              <td style={{ padding: 16, fontSize: 14, fontWeight: 600, color: '#c084fc', whiteSpace: 'nowrap' }}>{formatBRL(p.bonus)}</td>
+                              <td style={{ padding: 16, minWidth: 120 }}>
+                                <div className="progress-track"><div className={getProgressColor(p.pctMeta)} style={{ width: `${Math.min(p.pctMeta, 100)}%` }} /></div>
+                              </td>
+                            </>
+                          )}
                         </tr>
-                      ))}
+                        )
+                      })}
                       {profiles.length === 0 && (
                         <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'rgba(240,230,255,0.3)', fontSize: 14 }}>
                           Nenhum dado encontrado para {mesSelecionado}. Configure no painel de Editar Metas.
@@ -1458,23 +1489,44 @@ export default function AdminPage() {
                         ))}
                       </tr></thead>
                       <tbody>
-                        {rankingMensal.map((p, i) => (
+                        {rankingMensal.map((p, i) => {
+                          const ehCnpj = p.contrato === 'cnpj'
+                          const aReceberCnpj = p.realizado * PERCENTUAL_RECEBER_CNPJ
+                          return (
                           <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                             <td style={{ padding: 16, fontSize: 20 }}>{getMedalEmoji(p.pos)}</td>
-                            <td style={{ padding: 16, fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>{p.nome}</td>
+                            <td style={{ padding: 16, fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                              {p.nome}
+                              {ehCnpj && <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 6, background: 'rgba(56,189,248,0.16)', color: '#7dd3fc' }}>CNPJ</span>}
+                            </td>
                             <td style={{ padding: 16, fontSize: 14, fontWeight: 600, color: '#f472b6', whiteSpace: 'nowrap' }}>{formatBRL(p.realizado)}</td>
-                            <td style={{ padding: 16, fontSize: 14, fontWeight: 600, color: '#c084fc', whiteSpace: 'nowrap' }}>{formatBRL(p.bonus)}</td>
-                            <td style={{ padding: 16, fontSize: 14, color: p.vendas_avaliacoes > 0 ? '#facc15' : 'rgba(240,230,255,0.3)', whiteSpace: 'nowrap' }}>
-                              {formatBRL(p.vendas_avaliacoes)}
-                            </td>
-                            <td style={{ padding: 16, fontSize: 14, color: p.comissao_avaliacoes > 0 ? '#facc15' : 'rgba(240,230,255,0.3)', whiteSpace: 'nowrap' }}>
-                              {formatBRL(p.comissao_avaliacoes)}
-                            </td>
-                            <td style={{ padding: 16, whiteSpace: 'nowrap' }}>
-                              <span style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>{formatBRL(p.totalReceber)}</span>
-                            </td>
+                            {ehCnpj ? (
+                              <>
+                                <td style={{ padding: 16, fontSize: 14, color: 'rgba(240,230,255,0.35)' }}>—</td>
+                                <td style={{ padding: 16, fontSize: 14, color: 'rgba(240,230,255,0.35)' }}>—</td>
+                                <td style={{ padding: 16, fontSize: 14, color: 'rgba(240,230,255,0.35)' }}>—</td>
+                                <td style={{ padding: 16, whiteSpace: 'nowrap' }}>
+                                  <span style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>{formatBRL(aReceberCnpj)}</span>
+                                  <span style={{ marginLeft: 6, fontSize: 10, color: 'rgba(240,230,255,0.4)' }}>(30% CNPJ)</span>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td style={{ padding: 16, fontSize: 14, fontWeight: 600, color: '#c084fc', whiteSpace: 'nowrap' }}>{formatBRL(p.bonus)}</td>
+                                <td style={{ padding: 16, fontSize: 14, color: p.vendas_avaliacoes > 0 ? '#facc15' : 'rgba(240,230,255,0.3)', whiteSpace: 'nowrap' }}>
+                                  {formatBRL(p.vendas_avaliacoes)}
+                                </td>
+                                <td style={{ padding: 16, fontSize: 14, color: p.comissao_avaliacoes > 0 ? '#facc15' : 'rgba(240,230,255,0.3)', whiteSpace: 'nowrap' }}>
+                                  {formatBRL(p.comissao_avaliacoes)}
+                                </td>
+                                <td style={{ padding: 16, whiteSpace: 'nowrap' }}>
+                                  <span style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>{formatBRL(p.totalReceber)}</span>
+                                </td>
+                              </>
+                            )}
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
