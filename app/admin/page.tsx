@@ -249,9 +249,6 @@ export default function AdminPage() {
     ])
 
     const leiturasBanco = leiturasResult.status === 'fulfilled' ? ((leiturasResult.value.data ?? []) as MaterialLeitura[]) : []
-    if (leiturasResult.status === 'fulfilled' && leiturasResult.value.error) {
-      setErroMaterial(mensagemErroLeituras(leiturasResult.value.error.message, leiturasResult.value.error.code))
-    }
     const leiturasLocais = Object.entries(carregarLeiturasLocais(user.id)).map(([materialId, readAt]) => ({
       material_id: Number(materialId),
       profile_id: user.id,
@@ -279,9 +276,6 @@ export default function AdminPage() {
       .then(linhasGoogle => {
         const resumoGoogle = compatibilizarLeiturasGoogleSheets(profs ?? [], materiaisCarregados, linhasGoogle)
         setResumoLeiturasGoogle(resumoGoogle)
-        setErroMaterial(erroAtual =>
-          erroAtual.includes('contagem de aceites') ? '' : erroAtual,
-        )
         setLeiturasMateriais(prev => {
           const leiturasAtualizadas = new Map<string, MaterialLeitura>()
           ;[...prev, ...resumoGoogle.leituras].forEach(leitura => {
@@ -417,16 +411,6 @@ export default function AdminPage() {
       || texto.includes('link_url')
       || texto.includes('profile_id')
       || texto.includes('target_profile_ids')
-  }
-
-  function mensagemErroLeituras(message?: string, code?: string) {
-    if (code === 'PGRST205' || message?.toLowerCase().includes('materiais_leituras')) {
-      return 'A contagem de aceites ainda nao esta ativa no Supabase. Execute o arquivo supabase/fix_materiais_leituras_persistencia.sql no SQL Editor.'
-    }
-    if (message?.toLowerCase().includes('row-level security')) {
-      return 'O Supabase bloqueou a leitura dos aceites pelas regras de acesso. Reaplique o arquivo supabase/fix_materiais_leituras_persistencia.sql no SQL Editor.'
-    }
-    return 'Nao foi possivel carregar a contagem de aceites agora.'
   }
 
   function validarArquivoMaterial(arquivo: File) {
@@ -613,17 +597,6 @@ export default function AdminPage() {
       return
     }
 
-    if (materiaisFolhaPontoAnteriores.length > 0) {
-      await supabase.storage
-        .from(BUCKET_MATERIAIS)
-        .remove(materiaisFolhaPontoAnteriores.map(material => material.file_path))
-
-      await supabase
-        .from('materiais_informativos')
-        .delete()
-        .in('id', materiaisFolhaPontoAnteriores.map(material => material.id))
-    }
-
     const payloadMaterialBase = {
       titulo,
       descricao: descricaoMaterial.trim() || null,
@@ -648,12 +621,19 @@ export default function AdminPage() {
 
     if (insertError) {
       if (destinoMaterial.targetProfileIds) {
+        // Falha com profissionais específicas: remove apenas o arquivo novo (antigos preservados).
         await supabase.storage.from(BUCKET_MATERIAIS).remove([filePath])
         setErroMaterial(mensagemErroMateriais(insertError.message, insertError.code))
         setSalvandoMaterial(false)
         return
       }
 
+      // Fallback de storage para todas as profissionais: remove antigos do storage antes de listar.
+      if (substituirFolhaPonto && materiaisFolhaPontoAnteriores.length > 0) {
+        await supabase.storage
+          .from(BUCKET_MATERIAIS)
+          .remove(materiaisFolhaPontoAnteriores.map(material => material.file_path))
+      }
       const materiaisStorage = await listarMateriaisDoStorage(supabase, BUCKET_MATERIAIS)
       setMateriais(substituirFolhaPonto
         ? materiaisStorage.filter(material => !isFolhaPontoD1(material) || material.file_path === filePath)
@@ -667,6 +647,18 @@ export default function AdminPage() {
       setErroMaterial('')
       setSalvandoMaterial(false)
       return
+    }
+
+    // Insert bem-sucedido: agora remove os materiais antigos de Folha de Ponto.
+    if (materiaisFolhaPontoAnteriores.length > 0) {
+      await supabase.storage
+        .from(BUCKET_MATERIAIS)
+        .remove(materiaisFolhaPontoAnteriores.map(material => material.file_path))
+
+      await supabase
+        .from('materiais_informativos')
+        .delete()
+        .in('id', materiaisFolhaPontoAnteriores.map(material => material.id))
     }
 
     setTituloMaterial('')
@@ -955,9 +947,15 @@ export default function AdminPage() {
     acc[pergunta.grupo] = [...(acc[pergunta.grupo] ?? []), pergunta]
     return acc
   }, {})
+  const folhasDoMesSelecionado = folhasPontoD1.filter(folha => {
+    if (!folha.periodo) return true
+    const matchMes = folha.periodo.match(/\d{2}\/(\d{2})\/\d{4}/)
+    const mesFolha = matchMes ? Number(matchMes[1]) : null
+    return mesFolha === null || mesFolha === mesNum
+  })
   const folhasPontoPorProfissional = profiles.map(profile => ({
     profile,
-    folha: encontrarFolhaDoProfissional(folhasPontoD1, profile),
+    folha: encontrarFolhaDoProfissional(folhasDoMesSelecionado, profile),
   }))
   const folhasPontoIdentificadas = folhasPontoPorProfissional.filter(item => item.folha).length
   const podeEditar = perfilAdmin === 'admin'
@@ -1616,7 +1614,7 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {(folhasPontoD1.length > 0 || erroFolhaPontoD1) && (
+                {(folhasDoMesSelecionado.length > 0 || erroFolhaPontoD1) && (
                   <div style={{ padding: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                     <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Folha de Ponto D-1 por profissional</h3>
                     <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 14 }}>

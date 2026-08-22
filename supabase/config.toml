@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.resetar-senha-profissional]
 verify_jwt = false
+
+[functions.sincronizar-realizado-trinks]
+verify_jwt = false
