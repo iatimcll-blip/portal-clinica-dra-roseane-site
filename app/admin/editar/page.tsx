@@ -715,14 +715,24 @@ export default function EditarPage() {
                 Suba o Relatório de Comissões exportado do Trinks (Financeiro &gt; Pagamento de Profissionais). Cada profissional passa a ver o detalhe das próprias vendas do mês no painel dela. Reimportar o mesmo mês substitui os dados anteriores, sem duplicar.
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <label
+                  htmlFor="input-importar-vendas-csv"
+                  className="btn-primary"
+                  style={{
+                    width: 'auto', padding: '10px 18px', display: 'inline-flex', alignItems: 'center', gap: 8,
+                    cursor: importandoVendas ? 'not-allowed' : 'pointer', opacity: importandoVendas ? 0.6 : 1,
+                  }}
+                >
+                  {importandoVendas ? 'Importando...' : '📥 Selecionar arquivo CSV'}
+                </label>
                 <input
+                  id="input-importar-vendas-csv"
                   type="file"
                   accept=".csv"
                   onChange={handleImportarVendasCsv}
                   disabled={importandoVendas}
-                  style={{ fontSize: 13, color: 'rgba(240,230,255,0.7)' }}
+                  style={{ display: 'none' }}
                 />
-                {importandoVendas && <span style={{ fontSize: 12, color: 'rgba(240,230,255,0.5)' }}>Importando...</span>}
               </div>
             </div>
 
