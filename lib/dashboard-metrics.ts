@@ -43,6 +43,18 @@ export function mesclarResultadosComReferencia(
   return { resultados: [...semSubstituidos, ...extras], profissionaisComReferencia }
 }
 
+export function mesclarResultadosAnualComReferencia(
+  reais: Resultado[],
+  referencia: Resultado[],
+  anoAlvo: number,
+): Resultado[] {
+  let mesclado = reais
+  for (let mes = 1; mes <= 12; mes += 1) {
+    mesclado = mesclarResultadosComReferencia(mesclado, referencia, mes, anoAlvo).resultados
+  }
+  return mesclado
+}
+
 export function calcularRankingMensal(
   profiles: Profile[],
   resultados: Resultado[],

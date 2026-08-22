@@ -33,6 +33,7 @@ import {
   normalizarDataAutoavaliacao,
 } from '@/lib/autoavaliacao'
 import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
+import { mesclarResultadosAnualComReferencia } from '@/lib/dashboard-metrics'
 import { listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
 import { listarLinksManifest } from '@/lib/link-manifest'
@@ -235,7 +236,7 @@ export default function PainelProfissional() {
     let painel = painelRaw as DashboardProfissional | null
 
     if (painelError) {
-      const [{ data: resultadoMes }, { data: resultadosAno }] = await Promise.all([
+      const [{ data: resultadoMes }, { data: resultadosAno }, { data: resultadosAnoReferencia }] = await Promise.all([
         supabase
           .from('resultados')
           .select('realizado,comissao_avaliacoes,nota_feedback')
@@ -245,19 +246,24 @@ export default function PainelProfissional() {
           .maybeSingle(),
         supabase
           .from('resultados')
-          .select('realizado,nota_feedback')
+          .select('profile_id,mes,ano,realizado,comissao_avaliacoes,nota_feedback')
           .eq('profile_id', uid)
           .eq('ano', ANO_RESULTADOS),
+        supabase
+          .from('resultados')
+          .select('profile_id,mes,ano,realizado,comissao_avaliacoes,nota_feedback')
+          .eq('profile_id', uid)
+          .eq('ano', ANO_METAS),
       ])
 
-      const ano = resultadosAno ?? []
-      const notas = ano.map(r => r.nota_feedback ?? 0).filter(nota => nota > 0)
+      const anoMesclado = mesclarResultadosAnualComReferencia(resultadosAno ?? [], resultadosAnoReferencia ?? [], ANO_RESULTADOS)
+      const notas = anoMesclado.map(r => r.nota_feedback ?? 0).filter(nota => nota > 0)
 
       painel = {
         realizado: resultadoMes?.realizado ?? 0,
         comissao_avaliacoes: resultadoMes?.comissao_avaliacoes ?? 0,
         nota_feedback: resultadoMes?.nota_feedback ?? 0,
-        acumulado_anual: ano.reduce((s, r) => s + (r.realizado ?? 0), 0),
+        acumulado_anual: anoMesclado.reduce((s, r) => s + (r.realizado ?? 0), 0),
         media_feedback: notas.length > 0 ? notas.reduce((s, nota) => s + nota, 0) / notas.length : 0,
         posicao_mensal: 1,
         posicao_anual: 1,
