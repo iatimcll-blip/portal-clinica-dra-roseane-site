@@ -27,12 +27,13 @@ import {
 import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 import { normalizarNomePonto } from '@/lib/ponto-d1'
 
-const ANO = 2025
+const ANO_METAS = 2025
+const ANO_RESULTADOS = new Date().getFullYear()
 
 type ValorProf = { profile_id: string; realizado: number; comissao: number; feedback: number }
 
 const CONFIG_PADRAO: ConfiguracoesMes = {
-  id: 0, mes: 1, ano: ANO, meta_clinica: 80000, meta_gatilho: 8000, meta_max: 12000, meta_individual_anual: 120000,
+  id: 0, mes: 1, ano: ANO_METAS, meta_clinica: 80000, meta_gatilho: 8000, meta_max: 12000, meta_individual_anual: 120000,
 }
 
 async function mensagemErroFuncao(erro: unknown, mensagemPadrao: string): Promise<string> {
@@ -154,8 +155,8 @@ export default function EditarPage() {
 
     const [{ data: profs }, { data: cfg }, { data: resultados }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
-      supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO).single(),
-      supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', ANO),
+      supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO_METAS).single(),
+      supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', ANO_RESULTADOS),
     ])
 
     const profList: Profile[] = profs ?? []
@@ -177,7 +178,7 @@ export default function EditarPage() {
 
     try {
       if (DEMO_MODE) {
-        salvarDemoMes(config, valores, mesNum, ANO)
+        salvarDemoMes(config, valores, mesNum, ANO_RESULTADOS)
         await carregar(mesSelecionado)
         setSalvo(true)
         setTimeout(() => setSalvo(false), 3000)
@@ -187,7 +188,7 @@ export default function EditarPage() {
       const supabase = createClient()
 
       const { error: configError } = await supabase.from('configuracoes_mes').upsert(
-        { ...config, mes: mesNum, ano: ANO },
+        { ...config, mes: mesNum, ano: ANO_METAS },
         { onConflict: 'mes,ano' }
       )
 
@@ -197,7 +198,7 @@ export default function EditarPage() {
         valores.map(v => ({
           profile_id: v.profile_id,
           mes: mesNum,
-          ano: ANO,
+          ano: ANO_RESULTADOS,
           realizado: v.realizado,
           comissao_avaliacoes: v.comissao,
           nota_feedback: v.feedback,
@@ -240,7 +241,7 @@ export default function EditarPage() {
 
       const { data, error } = await supabase.functions.invoke('sincronizar-realizado-trinks', {
         headers: { Authorization: `Bearer ${accessToken}` },
-        body: { mes: mesNumero(mesSelecionado), ano: ANO },
+        body: { mes: mesNumero(mesSelecionado), ano: ANO_RESULTADOS },
       })
 
       if (error) {
@@ -335,6 +336,7 @@ export default function EditarPage() {
 
       let totalImportado = 0
       let valorTotal = 0
+      const agora = new Date().toISOString()
 
       for (const grupo of grupos.values()) {
         const { error: deleteError } = await supabase
@@ -349,15 +351,23 @@ export default function EditarPage() {
         const { error: insertError } = await supabase.from('vendas').insert(grupo.vendas)
         if (insertError) throw insertError
 
+        const somaRealizado = grupo.vendas.reduce((s, v) => s + v.valor, 0)
+        const { error: resultadoError } = await supabase.from('resultados').upsert(
+          { profile_id: grupo.profile_id, mes: grupo.mes, ano: grupo.ano, realizado: somaRealizado, updated_at: agora },
+          { onConflict: 'profile_id,mes,ano' },
+        )
+        if (resultadoError) throw resultadoError
+
         totalImportado += grupo.vendas.length
-        valorTotal += grupo.vendas.reduce((s, v) => s + v.valor, 0)
+        valorTotal += somaRealizado
       }
 
       const avisos = naoEncontrados.size > 0
         ? ` Profissionais do arquivo sem correspondência no painel (vendas ignoradas): ${Array.from(naoEncontrados).join(', ')}.`
         : ''
 
-      setMensagemAdicionar(`${totalImportado} venda(s) importada(s), totalizando ${formatBRL(valorTotal)}.${avisos}`)
+      setMensagemAdicionar(`${totalImportado} venda(s) importada(s), totalizando ${formatBRL(valorTotal)}. O "Realizado" de cada profissional foi atualizado com a soma das vendas do respectivo mês.${avisos}`)
+      await carregar(mesSelecionado)
     } catch (error) {
       console.error('Erro ao importar vendas', error)
       setErroSalvar(error instanceof Error ? error.message : 'Não foi possível importar o arquivo de vendas.')
