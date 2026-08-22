@@ -15,7 +15,7 @@ import AlterarSenhaCard from '@/components/AlterarSenhaCard'
 import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
-import { calcularRankingAnual, calcularRankingMensal, mesclarResultadosComReferencia, resultadoDoMes } from '@/lib/dashboard-metrics'
+import { calcularRankingAnual, calcularRankingMensal, mesclarResultadosAnualComReferencia, mesclarResultadosComReferencia, resultadoDoMes } from '@/lib/dashboard-metrics'
 import {
   atualizarAutoavaliacaoConfigGoogleSheets,
   buscarAutoavaliacaoConfigGoogleSheets,
@@ -211,18 +211,20 @@ export default function AdminPage() {
     setNomeAtual(currentProfile.nome ?? '')
     setPerfilAdmin(user.email?.toLowerCase() === 'gestao@clinica.com' ? 'gestao' : currentProfile.role)
 
-    const [{ data: profs }, { data: cfg }, { data: res }, { data: resReferencia }, { data: anuais }, { data: mats, error: matsError }] = await Promise.all([
+    const [{ data: profs }, { data: cfg }, { data: res }, { data: resReferencia }, { data: anuais }, { data: anuaisReferencia }, { data: mats, error: matsError }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO_METAS).single(),
       supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', ANO_RESULTADOS),
       supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', ANO_METAS),
       supabase.from('resultados').select('*').eq('ano', ANO_RESULTADOS),
+      supabase.from('resultados').select('*').eq('ano', ANO_METAS),
       supabase.from('materiais_informativos').select('*').order('created_at', { ascending: false }),
     ])
 
     const { resultados: resMesclados, profissionaisComReferencia: refsDoMes } = mesclarResultadosComReferencia(
       res ?? [], resReferencia ?? [], mesNum, ANO_RESULTADOS,
     )
+    const anuaisMesclados = mesclarResultadosAnualComReferencia(anuais ?? [], anuaisReferencia ?? [], ANO_RESULTADOS)
 
     let materiaisCarregados = mats ?? []
     let erroMateriaisAtual = matsError ? mensagemErroMateriais(matsError.message, matsError.code) : ''
@@ -249,7 +251,7 @@ export default function AdminPage() {
     setConfig(cfg ?? null)
     setResultados(resMesclados)
     setProfissionaisComReferencia(refsDoMes)
-    setTodosResultados(anuais ?? [])
+    setTodosResultados(anuaisMesclados)
     setMateriais(materiaisCarregados)
     setErroMaterial(erroMateriaisAtual)
 
