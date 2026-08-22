@@ -1,0 +1,33 @@
+name: Sincronizar Realizado com Trinks
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # 05:00 America/Sao_Paulo
+  workflow_dispatch:
+    inputs:
+      mes:
+        description: 'Mes a sincronizar (1-12). Deixe vazio para o mes atual.'
+        required: false
+      ano:
+        description: 'Ano a sincronizar. Deixe vazio para o ano atual.'
+        required: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar Edge Function de sincronizacao
+        env:
+          SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MES: ${{ inputs.mes }}
+          ANO: ${{ inputs.ano }}
+        run: |
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY}" ]; then
+            echo "Erro: configure NEXT_PUBLIC_SUPABASE_URL (Variables) e SUPABASE_SERVICE_ROLE_KEY (Secrets) em Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          curl -sf -X POST "${SUPABASE_URL}/functions/v1/sincronizar-realizado-trinks" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"mes\": ${MES:-null}, \"ano\": ${ANO:-null}}"

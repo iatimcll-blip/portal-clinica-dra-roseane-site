@@ -33,6 +33,20 @@ const CONFIG_PADRAO: ConfiguracoesMes = {
   id: 0, mes: 1, ano: ANO, meta_clinica: 80000, meta_gatilho: 8000, meta_max: 12000, meta_individual_anual: 120000,
 }
 
+async function mensagemErroFuncao(erro: unknown, mensagemPadrao: string): Promise<string> {
+  const contexto = (erro as { context?: Response })?.context
+  if (contexto && typeof contexto.json === 'function') {
+    try {
+      const corpo = await contexto.json()
+      if (corpo?.error) return corpo.error as string
+      if (corpo?.message) return corpo.message as string
+    } catch {
+      // resposta da Edge Function sem corpo JSON: mantem a mensagem padrao
+    }
+  }
+  return mensagemPadrao
+}
+
 export default function EditarPage() {
   const router = useRouter()
   const [mesSelecionado, setMesSelecionado] = useState('Janeiro')
@@ -42,6 +56,7 @@ export default function EditarPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [salvo, setSalvo] = useState(false)
+  const [sincronizando, setSincronizando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
   const [novoNome, setNovoNome] = useState('')
   const [novoPrimeiroNome, setNovoPrimeiroNome] = useState('')
@@ -159,6 +174,61 @@ export default function EditarPage() {
     }
   }
 
+  async function handleSincronizarTrinks() {
+    setErroSalvar('')
+    setMensagemAdicionar('')
+
+    if (DEMO_MODE) {
+      setErroSalvar('Sincronização com o Trinks indisponível no modo demonstração.')
+      return
+    }
+
+    setSincronizando(true)
+
+    try {
+      const supabase = createClient()
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (sessionError || !accessToken) {
+        setErroSalvar('Sessão admin expirada. Entre novamente para sincronizar com o Trinks.')
+        return
+      }
+
+      const { data, error } = await supabase.functions.invoke('sincronizar-realizado-trinks', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: { mes: mesNumero(mesSelecionado), ano: ANO },
+      })
+
+      if (error) {
+        throw new Error('Não foi possível sincronizar com o Trinks. Verifique se a Edge Function está implantada e os secrets do Trinks configurados.')
+      }
+
+      const resultado = data as {
+        atualizados?: { nome: string; realizado: number }[]
+        naoEncontrados?: string[]
+        semVinculoTrinks?: string[]
+      }
+
+      const avisos: string[] = []
+      if (resultado.naoEncontrados && resultado.naoEncontrados.length > 0) {
+        avisos.push(`Profissionais do Trinks sem correspondência no painel: ${resultado.naoEncontrados.join(', ')}.`)
+      }
+      if (resultado.semVinculoTrinks && resultado.semVinculoTrinks.length > 0) {
+        avisos.push(`Profissionais do painel sem correspondência no Trinks: ${resultado.semVinculoTrinks.join(', ')}.`)
+      }
+
+      setMensagemAdicionar(
+        `${resultado.atualizados?.length ?? 0} profissional(is) atualizada(s) a partir do Trinks.${avisos.length > 0 ? ' ' + avisos.join(' ') : ''}`
+      )
+      await carregar(mesSelecionado)
+    } catch (error) {
+      console.error('Erro ao sincronizar com o Trinks', error)
+      setErroSalvar(error instanceof Error ? error.message : 'Não foi possível sincronizar com o Trinks.')
+    } finally {
+      setSincronizando(false)
+    }
+  }
+
   async function handleAdicionarProfissional(event: React.SyntheticEvent) {
     event.preventDefault()
     setErroSalvar('')
@@ -220,7 +290,7 @@ export default function EditarPage() {
       })
 
       if (functionError) {
-        throw new Error('A função criar-profissional não está publicada no Supabase. O acesso não foi criado para evitar e-mail sem confirmação. Publique a Edge Function e tente novamente.')
+        throw new Error(await mensagemErroFuncao(functionError, 'A função criar-profissional não está publicada no Supabase. O acesso não foi criado para evitar e-mail sem confirmação. Publique a Edge Function e tente novamente.'))
       }
 
       setNovoNome('')
@@ -477,6 +547,11 @@ export default function EditarPage() {
                 <option key={m} value={m} style={{ background: '#1a0a2e' }}>{m}</option>
               ))}
             </select>
+            <button onClick={handleSincronizarTrinks} className="btn-primary"
+              style={{ width: 'auto', padding: '10px 18px', background: 'rgba(56,189,248,0.16)', border: '1px solid rgba(56,189,248,0.3)' }}
+              disabled={sincronizando || loading}>
+              {sincronizando ? 'Sincronizando...' : '🔄 Sincronizar com Trinks'}
+            </button>
             <button onClick={handleSalvar} className="btn-primary"
               style={{ width: 'auto', padding: '10px 24px' }} disabled={saving || loading}>
               {salvo ? '✅ Salvo!' : saving ? 'Salvando...' : '💾 Salvar'}
