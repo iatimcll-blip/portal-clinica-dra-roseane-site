@@ -1,4 +1,4 @@
-import type { Profile, ConfiguracoesMes, Resultado } from './types'
+import type { Profile, ConfiguracoesMes, Resultado, Venda } from './types'
 
 export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
@@ -154,6 +154,14 @@ export function getDemoResultadosMes(mes: number): Resultado[] {
 
 export function getDemoResultadosAnual(ateMes: number): Resultado[] {
   return getResultadosAtualizados().filter(r => r.mes <= ateMes)
+}
+
+export function getDemoVendasMes(mes: number): Venda[] {
+  const ano = new Date().getFullYear()
+  return [
+    { profile_id: DEMO_ADMIN.id, mes, ano, data_venda: `${ano}-${String(mes).padStart(2, '0')}-05`, cliente_nome: 'Cliente Exemplo', servico: 'Protocolo Facial', categoria: 'Facial', valor: 350, valor_comissao: null },
+    { profile_id: DEMO_ADMIN.id, mes, ano, data_venda: `${ano}-${String(mes).padStart(2, '0')}-12`, cliente_nome: 'Cliente Demonstração', servico: 'Limpeza de Pele', categoria: 'Facial', valor: 180, valor_comissao: null },
+  ]
 }
 
 export function salvarDemoMes(config: ConfiguracoesMes, valores: ValorDemo[], mes: number, ano = 2025) {

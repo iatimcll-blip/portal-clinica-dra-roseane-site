@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# dados sensiveis locais (nunca versionar: contem CPF/dados de clientes)
+/relatório/
+/relatorio/
+/backupbase/
+
+# cache local do Supabase CLI
+/supabase/.temp/

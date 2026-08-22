@@ -77,6 +77,19 @@ export type MaterialLeitura = {
   read_at: string
 }
 
+export type Venda = {
+  id?: number
+  profile_id: string
+  mes: number
+  ano: number
+  data_venda: string
+  cliente_nome: string | null
+  servico: string | null
+  categoria: string | null
+  valor: number
+  valor_comissao: number | null
+}
+
 export type AuditoriaEvento = {
   id: number
   tabela: string
