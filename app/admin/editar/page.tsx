@@ -26,7 +26,7 @@ import {
 } from '@/lib/demo-data'
 import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 import { normalizarNomePonto } from '@/lib/ponto-d1'
-import { cicloDaData, rotuloCiclo } from '@/lib/ciclo-quinzenal'
+import { cicloDaData, rotuloCiclo, rotuloCicloCurto } from '@/lib/ciclo-quinzenal'
 
 const ANO_METAS = 2025
 const ANO_RESULTADOS = new Date().getFullYear()
@@ -791,7 +791,7 @@ export default function EditarPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                        {['Profissional', rotuloCiclo(1, mesNumero(mesSelecionado), ANO_RESULTADOS) + ' — Realizado', 'A receber (30%)', rotuloCiclo(2, mesNumero(mesSelecionado), ANO_RESULTADOS) + ' — Realizado', 'A receber (30%)'].map(h => (
+                        {['Profissional', rotuloCicloCurto(1) + ' — Realizado', 'A receber (30%)', rotuloCicloCurto(2) + ' — Realizado', 'A receber (30%)'].map(h => (
                           <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
