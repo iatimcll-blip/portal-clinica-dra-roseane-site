@@ -26,9 +26,11 @@ import {
 } from '@/lib/demo-data'
 import { registrarEventoGoogleSheets } from '@/lib/google-sheets-sync'
 import { normalizarNomePonto } from '@/lib/ponto-d1'
+import { cicloDaData, rotuloCiclo } from '@/lib/ciclo-quinzenal'
 
 const ANO_METAS = 2025
 const ANO_RESULTADOS = new Date().getFullYear()
+const PERCENTUAL_RECEBER_CNPJ = 0.30
 
 type ValorProf = { profile_id: string; realizado: number; comissao: number; feedback: number }
 
@@ -339,6 +341,7 @@ export default function EditarPage() {
       let totalImportado = 0
       let valorTotal = 0
       const agora = new Date().toISOString()
+      const linhasCiclosCnpj: string[] = []
 
       for (const grupo of grupos.values()) {
         const { error: deleteError } = await supabase
@@ -362,13 +365,26 @@ export default function EditarPage() {
 
         totalImportado += grupo.vendas.length
         valorTotal += somaRealizado
+
+        const profileDoGrupo = profiles.find(p => p.id === grupo.profile_id)
+        if (profileDoGrupo?.contrato === 'cnpj') {
+          const somaCiclo1 = grupo.vendas.filter(v => cicloDaData(v.data_venda) === 1).reduce((s, v) => s + v.valor, 0)
+          const somaCiclo2 = grupo.vendas.filter(v => cicloDaData(v.data_venda) === 2).reduce((s, v) => s + v.valor, 0)
+          linhasCiclosCnpj.push(
+            `${profileDoGrupo.nome}: ${rotuloCiclo(1, grupo.mes, grupo.ano)} = ${formatBRL(somaCiclo1)} (a receber ${formatBRL(somaCiclo1 * PERCENTUAL_RECEBER_CNPJ)}); `
+            + `${rotuloCiclo(2, grupo.mes, grupo.ano)} = ${formatBRL(somaCiclo2)} (a receber ${formatBRL(somaCiclo2 * PERCENTUAL_RECEBER_CNPJ)})`,
+          )
+        }
       }
 
       const avisos = naoEncontrados.size > 0
         ? ` Profissionais do arquivo sem correspondência no painel (vendas ignoradas): ${Array.from(naoEncontrados).join(', ')}.`
         : ''
+      const ciclosTexto = linhasCiclosCnpj.length > 0
+        ? ` Ciclos quinzenais (CNPJ) — ${linhasCiclosCnpj.join(' | ')}.`
+        : ''
 
-      setMensagemAdicionar(`${totalImportado} venda(s) importada(s), totalizando ${formatBRL(valorTotal)}. O "Realizado" de cada profissional foi atualizado com a soma das vendas do respectivo mês.${avisos}`)
+      setMensagemAdicionar(`${totalImportado} venda(s) importada(s), totalizando ${formatBRL(valorTotal)}. O "Realizado" de cada profissional foi atualizado com a soma das vendas do respectivo mês.${ciclosTexto}${avisos}`)
       await carregar(mesSelecionado)
     } catch (error) {
       console.error('Erro ao importar vendas', error)
