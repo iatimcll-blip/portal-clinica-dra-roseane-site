@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Profile, ConfiguracoesMes, MaterialInformativo, Resultado, MaterialLeitura, AuditoriaEvento } from '@/lib/types'
+import type { Profile, ConfiguracoesMes, MaterialInformativo, Resultado, MaterialLeitura, AuditoriaEvento, Venda } from '@/lib/types'
 import {
   MESES_LISTA, formatBRL, getStatusClass, getProgressColor,
   getMedalEmoji, calcPctMeta, mesNumero,
@@ -16,6 +16,7 @@ import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, mesclarResultadosAnualComReferencia, mesclarResultadosComReferencia, resultadoDoMes } from '@/lib/dashboard-metrics'
+import { cicloDaData, rotuloCiclo } from '@/lib/ciclo-quinzenal'
 import {
   atualizarAutoavaliacaoConfigGoogleSheets,
   buscarAutoavaliacaoConfigGoogleSheets,
@@ -120,6 +121,7 @@ export default function AdminPage() {
   const [resultados, setResultados] = useState<Resultado[]>([])
   const [todosResultados, setTodosResultados] = useState<Resultado[]>([])
   const [profissionaisComReferencia, setProfissionaisComReferencia] = useState<Set<string>>(new Set())
+  const [vendasDoMes, setVendasDoMes] = useState<Pick<Venda, 'profile_id' | 'data_venda' | 'valor'>[]>([])
   const [materiais, setMateriais] = useState<MaterialInformativo[]>([])
   const [leiturasMateriais, setLeiturasMateriais] = useState<MaterialLeitura[]>([])
   const [resumoLeiturasGoogle, setResumoLeiturasGoogle] = useState<CompatibilizacaoLeituras | null>(null)
@@ -211,13 +213,14 @@ export default function AdminPage() {
     setNomeAtual(currentProfile.nome ?? '')
     setPerfilAdmin(user.email?.toLowerCase() === 'gestao@clinica.com' ? 'gestao' : currentProfile.role)
 
-    const [{ data: profs }, { data: cfg }, { data: res }, { data: resReferencia }, { data: anuais }, { data: anuaisReferencia }, { data: mats, error: matsError }] = await Promise.all([
+    const [{ data: profs }, { data: cfg }, { data: res }, { data: resReferencia }, { data: anuais }, { data: anuaisReferencia }, { data: vendasMes }, { data: mats, error: matsError }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO_METAS).single(),
       supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', ANO_RESULTADOS),
       supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', ANO_METAS),
       supabase.from('resultados').select('*').eq('ano', ANO_RESULTADOS),
       supabase.from('resultados').select('*').eq('ano', ANO_METAS),
+      supabase.from('vendas').select('profile_id,data_venda,valor').eq('mes', mesNum).eq('ano', ANO_RESULTADOS),
       supabase.from('materiais_informativos').select('*').order('created_at', { ascending: false }),
     ])
 
@@ -225,6 +228,7 @@ export default function AdminPage() {
       res ?? [], resReferencia ?? [], mesNum, ANO_RESULTADOS,
     )
     const anuaisMesclados = mesclarResultadosAnualComReferencia(anuais ?? [], anuaisReferencia ?? [], ANO_RESULTADOS)
+    setVendasDoMes(vendasMes ?? [])
 
     let materiaisCarregados = mats ?? []
     let erroMateriaisAtual = matsError ? mensagemErroMateriais(matsError.message, matsError.code) : ''
@@ -1397,6 +1401,9 @@ export default function AdminPage() {
                     <tbody>
                       {rankingMensal.map((p, i) => {
                         const ehCnpj = p.contrato === 'cnpj'
+                        const vendasDaProfissional = vendasDoMes.filter(v => v.profile_id === p.id)
+                        const realizadoCiclo1 = vendasDaProfissional.filter(v => cicloDaData(v.data_venda) === 1).reduce((s, v) => s + v.valor, 0)
+                        const realizadoCiclo2 = vendasDaProfissional.filter(v => cicloDaData(v.data_venda) === 2).reduce((s, v) => s + v.valor, 0)
                         return (
                         <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                           <td style={{ padding: 16, fontSize: 20 }}>{getMedalEmoji(p.pos)}</td>
@@ -1412,8 +1419,14 @@ export default function AdminPage() {
                             <>
                               <td style={{ padding: 16, fontSize: 14, color: 'rgba(240,230,255,0.35)' }}>—</td>
                               <td style={{ padding: 16, fontSize: 14, color: 'rgba(240,230,255,0.35)' }}>—</td>
-                              <td style={{ padding: 16, fontSize: 12, color: 'rgba(240,230,255,0.35)' }}>Sem meta (CNPJ)</td>
-                              <td style={{ padding: 16, fontSize: 14, fontWeight: 600, color: '#7dd3fc', whiteSpace: 'nowrap' }}>{formatBRL(p.realizado * PERCENTUAL_RECEBER_CNPJ)} <span style={{ fontSize: 10, color: 'rgba(240,230,255,0.4)' }}>(30% a receber)</span></td>
+                              <td style={{ padding: 16, fontSize: 12, color: 'rgba(240,230,255,0.7)', lineHeight: 1.6 }}>
+                                <div>NF1</div>
+                                <div>NF2</div>
+                              </td>
+                              <td style={{ padding: 16, fontSize: 12, fontWeight: 600, color: '#7dd3fc', whiteSpace: 'nowrap', lineHeight: 1.6 }}>
+                                <div>{rotuloCiclo(1, mesNum, ANO_RESULTADOS)} {formatBRL(realizadoCiclo1 * PERCENTUAL_RECEBER_CNPJ)}</div>
+                                <div>{rotuloCiclo(2, mesNum, ANO_RESULTADOS)} {formatBRL(realizadoCiclo2 * PERCENTUAL_RECEBER_CNPJ)}</div>
+                              </td>
                               <td style={{ padding: 16, minWidth: 120, color: 'rgba(240,230,255,0.3)', fontSize: 12 }}>—</td>
                             </>
                           ) : (
