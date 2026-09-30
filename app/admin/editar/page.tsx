@@ -104,6 +104,7 @@ export default function EditarPage() {
   const [salvo, setSalvo] = useState(false)
   const [sincronizando, setSincronizando] = useState(false)
   const [importandoVendas, setImportandoVendas] = useState(false)
+  const [vendasDoMes, setVendasDoMes] = useState<Pick<Venda, 'profile_id' | 'data_venda' | 'valor'>[]>([])
   const [erroSalvar, setErroSalvar] = useState('')
   const [novoNome, setNovoNome] = useState('')
   const [novoPrimeiroNome, setNovoPrimeiroNome] = useState('')
@@ -157,10 +158,11 @@ export default function EditarPage() {
       return
     }
 
-    const [{ data: profs }, { data: cfg }, { data: resultados }] = await Promise.all([
+    const [{ data: profs }, { data: cfg }, { data: resultados }, { data: vendasMes }] = await Promise.all([
       supabase.from('profiles').select('*').eq('ativo', true).eq('role', 'user').order('nome'),
       supabase.from('configuracoes_mes').select('*').eq('mes', mesNum).eq('ano', ANO_METAS).single(),
       supabase.from('resultados').select('*').eq('mes', mesNum).eq('ano', ANO_RESULTADOS),
+      supabase.from('vendas').select('profile_id,data_venda,valor').eq('mes', mesNum).eq('ano', ANO_RESULTADOS),
     ])
 
     const profList: Profile[] = profs ?? []
@@ -170,6 +172,7 @@ export default function EditarPage() {
       const r = resultados?.find(x => x.profile_id === p.id)
       return { profile_id: p.id, realizado: r?.realizado ?? 0, comissao: r?.comissao_avaliacoes ?? 0, feedback: r?.nota_feedback ?? 0 }
     }))
+    setVendasDoMes(vendasMes ?? [])
     setLoading(false)
   }, [router])
 
@@ -670,6 +673,15 @@ export default function EditarPage() {
   const pctClinica = config.meta_clinica > 0 ? ((totalRealizado / config.meta_clinica) * 100).toFixed(1) : '0.0'
   const metaClinicaBatida = totalRealizado >= config.meta_clinica
 
+  const ciclosCnpj = profiles
+    .filter(p => p.contrato === 'cnpj')
+    .map(p => {
+      const vendasDaProfissional = vendasDoMes.filter(v => v.profile_id === p.id)
+      const ciclo1 = vendasDaProfissional.filter(v => cicloDaData(v.data_venda) === 1).reduce((s, v) => s + v.valor, 0)
+      const ciclo2 = vendasDaProfissional.filter(v => cicloDaData(v.data_venda) === 2).reduce((s, v) => s + v.valor, 0)
+      return { profile: p, ciclo1, ciclo2 }
+    })
+
   return (
     <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
       <aside className="app-sidebar" style={{
@@ -766,6 +778,39 @@ export default function EditarPage() {
                 />
               </div>
             </div>
+
+            {ciclosCnpj.length > 0 && (
+              <div className="glass-sm" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
+                <div style={{ padding: '18px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 600 }}>💳 Pagamento Quinzenal (CNPJ) — {mesSelecionado}</h3>
+                  <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.4)', marginTop: 4 }}>
+                    Realizado e valor a receber (30%) de cada profissional CNPJ, divididos por ciclo.
+                  </p>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        {['Profissional', rotuloCiclo(1, mesNumero(mesSelecionado), ANO_RESULTADOS) + ' — Realizado', 'A receber (30%)', rotuloCiclo(2, mesNumero(mesSelecionado), ANO_RESULTADOS) + ' — Realizado', 'A receber (30%)'].map(h => (
+                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, color: 'rgba(240,230,255,0.4)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ciclosCnpj.map(({ profile, ciclo1, ciclo2 }) => (
+                        <tr key={profile.id} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500 }}>{profile.nome}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 13 }}>{formatBRL(ciclo1)}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#4ade80' }}>{formatBRL(ciclo1 * PERCENTUAL_RECEBER_CNPJ)}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 13 }}>{formatBRL(ciclo2)}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#4ade80' }}>{formatBRL(ciclo2 * PERCENTUAL_RECEBER_CNPJ)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleAdicionarProfissional} className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Adicionar profissional</h3>
