@@ -13,3 +13,7 @@ export function rotuloCiclo(ciclo: CicloQuinzenal, mes: number, ano: number): st
   if (ciclo === 1) return '1º ciclo (dia 1 a 15)'
   return `2º ciclo (dia 16 a ${ultimoDiaDoMes(mes, ano)})`
 }
+
+export function rotuloCicloCurto(ciclo: CicloQuinzenal): string {
+  return ciclo === 1 ? '1º Ciclo' : '2º Ciclo'
+}

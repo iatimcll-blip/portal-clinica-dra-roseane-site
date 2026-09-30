@@ -34,7 +34,7 @@ import {
 } from '@/lib/autoavaliacao'
 import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
 import { mesclarResultadosAnualComReferencia } from '@/lib/dashboard-metrics'
-import { cicloDaData, rotuloCiclo } from '@/lib/ciclo-quinzenal'
+import { cicloDaData, rotuloCicloCurto } from '@/lib/ciclo-quinzenal'
 import { listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
 import { listarLinksManifest } from '@/lib/link-manifest'
@@ -966,8 +966,6 @@ export default function PainelProfissional() {
   if (profile.contrato === 'cnpj') {
     const comunicados = materiaisAgrupados['Comunicados'] ?? []
     const aReceberCnpj = realizado * 0.30
-    const mesNumSelecionado = mesNumero(mesSelecionado)
-    const anoAtualReal = new Date().getFullYear()
     const realizadoCiclo1 = vendasMes.filter(v => cicloDaData(v.data_venda) === 1).reduce((s, v) => s + v.valor, 0)
     const realizadoCiclo2 = vendasMes.filter(v => cicloDaData(v.data_venda) === 2).reduce((s, v) => s + v.valor, 0)
 
@@ -1038,7 +1036,7 @@ export default function PainelProfissional() {
             <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
               <div style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.03)', textAlign: 'center' }}>
                 <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)', marginBottom: 8, textTransform: 'uppercase' }}>
-                  {rotuloCiclo(1, mesNumSelecionado, anoAtualReal)}
+                  {rotuloCicloCurto(1)}
                 </div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: '#f472b6' }}>{formatBRL(realizadoCiclo1)}</div>
                 <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.5)', marginTop: 4 }}>Realizado</div>
@@ -1047,7 +1045,7 @@ export default function PainelProfissional() {
               </div>
               <div style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.03)', textAlign: 'center' }}>
                 <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)', marginBottom: 8, textTransform: 'uppercase' }}>
-                  {rotuloCiclo(2, mesNumSelecionado, anoAtualReal)}
+                  {rotuloCicloCurto(2)}
                 </div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: '#f472b6' }}>{formatBRL(realizadoCiclo2)}</div>
                 <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.5)', marginTop: 4 }}>Realizado</div>

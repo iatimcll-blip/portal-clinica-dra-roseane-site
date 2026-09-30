@@ -16,7 +16,7 @@ import PdfPageViewer from '@/components/PdfPageViewer'
 import { DEMO_MODE, getDemoConfig, getDemoProfiles, getDemoResultadosMes, getDemoResultadosAnual } from '@/lib/demo-data'
 import { assetPath } from '@/lib/asset-path'
 import { calcularRankingAnual, calcularRankingMensal, mesclarResultadosAnualComReferencia, mesclarResultadosComReferencia, resultadoDoMes } from '@/lib/dashboard-metrics'
-import { cicloDaData, rotuloCiclo } from '@/lib/ciclo-quinzenal'
+import { cicloDaData } from '@/lib/ciclo-quinzenal'
 import {
   atualizarAutoavaliacaoConfigGoogleSheets,
   buscarAutoavaliacaoConfigGoogleSheets,
@@ -1424,8 +1424,8 @@ export default function AdminPage() {
                                 <div>NF2</div>
                               </td>
                               <td style={{ padding: 16, fontSize: 12, fontWeight: 600, color: '#7dd3fc', whiteSpace: 'nowrap', lineHeight: 1.6 }}>
-                                <div>{rotuloCiclo(1, mesNum, ANO_RESULTADOS)} {formatBRL(realizadoCiclo1 * PERCENTUAL_RECEBER_CNPJ)}</div>
-                                <div>{rotuloCiclo(2, mesNum, ANO_RESULTADOS)} {formatBRL(realizadoCiclo2 * PERCENTUAL_RECEBER_CNPJ)}</div>
+                                <div>{formatBRL(realizadoCiclo1 * PERCENTUAL_RECEBER_CNPJ)}</div>
+                                <div>{formatBRL(realizadoCiclo2 * PERCENTUAL_RECEBER_CNPJ)}</div>
                               </td>
                               <td style={{ padding: 16, minWidth: 120, color: 'rgba(240,230,255,0.3)', fontSize: 12 }}>—</td>
                             </>
