@@ -34,6 +34,7 @@ import {
 } from '@/lib/autoavaliacao'
 import { compatibilizarLeiturasGoogleSheets } from '@/lib/material-read-compat'
 import { mesclarResultadosAnualComReferencia } from '@/lib/dashboard-metrics'
+import { cicloDaData, rotuloCiclo } from '@/lib/ciclo-quinzenal'
 import { listarMateriaisDoStorage } from '@/lib/materiais-storage'
 import { exigeCienciaMaterial } from '@/lib/material-obligation'
 import { listarLinksManifest } from '@/lib/link-manifest'
@@ -965,6 +966,10 @@ export default function PainelProfissional() {
   if (profile.contrato === 'cnpj') {
     const comunicados = materiaisAgrupados['Comunicados'] ?? []
     const aReceberCnpj = realizado * 0.30
+    const mesNumSelecionado = mesNumero(mesSelecionado)
+    const anoAtualReal = new Date().getFullYear()
+    const realizadoCiclo1 = vendasMes.filter(v => cicloDaData(v.data_venda) === 1).reduce((s, v) => s + v.valor, 0)
+    const realizadoCiclo2 = vendasMes.filter(v => cicloDaData(v.data_venda) === 2).reduce((s, v) => s + v.valor, 0)
 
     return (
       <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
@@ -1022,6 +1027,33 @@ export default function PainelProfissional() {
             <div className="glass-sm" style={{ padding: 24, textAlign: 'center' }}>
               <div style={{ fontSize: 32, fontWeight: 800, color: '#4ade80' }}>{formatBRL(aReceberCnpj)}</div>
               <div style={{ fontSize: 13, color: 'rgba(240,230,255,0.5)' }}>Valor a Receber (30% do realizado)</div>
+            </div>
+          </div>
+
+          <div className="glass-sm" style={{ padding: 24, marginBottom: 24 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>💰 Pagamento por quinzena</h3>
+            <p style={{ fontSize: 12, color: 'rgba(240,230,255,0.45)', marginBottom: 18 }}>
+              Vendas de {mesSelecionado} divididas em dois ciclos de recebimento.
+            </p>
+            <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+              <div style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.03)', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)', marginBottom: 8, textTransform: 'uppercase' }}>
+                  {rotuloCiclo(1, mesNumSelecionado, anoAtualReal)}
+                </div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#f472b6' }}>{formatBRL(realizadoCiclo1)}</div>
+                <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.5)', marginTop: 4 }}>Realizado</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#4ade80', marginTop: 10 }}>{formatBRL(realizadoCiclo1 * 0.30)}</div>
+                <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.5)' }}>A receber (30%)</div>
+              </div>
+              <div style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.03)', textAlign: 'center' }}>
+                <div style={{ fontSize: 11, color: 'rgba(240,230,255,0.4)', marginBottom: 8, textTransform: 'uppercase' }}>
+                  {rotuloCiclo(2, mesNumSelecionado, anoAtualReal)}
+                </div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#f472b6' }}>{formatBRL(realizadoCiclo2)}</div>
+                <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.5)', marginTop: 4 }}>Realizado</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#4ade80', marginTop: 10 }}>{formatBRL(realizadoCiclo2 * 0.30)}</div>
+                <div style={{ fontSize: 12, color: 'rgba(240,230,255,0.5)' }}>A receber (30%)</div>
+              </div>
             </div>
           </div>
 
